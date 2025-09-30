@@ -1,0 +1,6 @@
+repo_path: "/home/fjammes/src/github.com/astrolabsoftware/fink-broker"
+check_interval: 5m
+test_script: "./e2e/fink-ci.sh"
+max_runs_per_day: 1
+options: "-c -i ztf"
+max_commit_age: 240h

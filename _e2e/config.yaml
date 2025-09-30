@@ -1,0 +1,6 @@
+repo_path: "/home/fjammes/src/github.com/k8s-school/home-ci-e2e"
+check_interval: 5m
+test_script: "e2e-test.sh"
+max_runs_per_day: 1
+options: ""
+max_commit_age: 240h
