@@ -87,6 +87,57 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 
 	slog.Debug("Test output will be logged", "log_file", logFilePath)
 
+	// Create temporary directory for cloning
+	tempDir, err := os.MkdirTemp("/tmp", fmt.Sprintf("ci-test-%s-%s-", branchFile, commit[:8]))
+	if err != nil {
+		return fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+	defer os.RemoveAll(tempDir) // Clean up temp directory
+
+	slog.Debug("Created temporary repository", "temp_dir", tempDir)
+
+	// Clone the repository to the temporary directory
+	cloneCmd := exec.CommandContext(tr.ctx, "git", "clone", tr.config.RepoPath, tempDir)
+	cloneCmd.Stdout = io.MultiWriter(os.Stdout, logFile)
+	cloneCmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+
+	fmt.Fprintf(logFile, "=== Cloning Repository ===\n")
+	fmt.Fprintf(logFile, "Source: %s\n", tr.config.RepoPath)
+	fmt.Fprintf(logFile, "Destination: %s\n", tempDir)
+	fmt.Fprintf(logFile, "========================\n\n")
+
+	if err := cloneCmd.Run(); err != nil {
+		return fmt.Errorf("failed to clone repository to %s: %w", tempDir, err)
+	}
+
+	// Checkout the specific branch and commit
+	checkoutCmd := exec.CommandContext(tr.ctx, "git", "checkout", branch)
+	checkoutCmd.Dir = tempDir
+	checkoutCmd.Stdout = io.MultiWriter(os.Stdout, logFile)
+	checkoutCmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+
+	fmt.Fprintf(logFile, "=== Checking out branch ===\n")
+	fmt.Fprintf(logFile, "Branch: %s\n", branch)
+	fmt.Fprintf(logFile, "========================\n\n")
+
+	if err := checkoutCmd.Run(); err != nil {
+		return fmt.Errorf("failed to checkout branch %s: %w", branch, err)
+	}
+
+	// Reset to the specific commit
+	resetCmd := exec.CommandContext(tr.ctx, "git", "reset", "--hard", commit)
+	resetCmd.Dir = tempDir
+	resetCmd.Stdout = io.MultiWriter(os.Stdout, logFile)
+	resetCmd.Stderr = io.MultiWriter(os.Stderr, logFile)
+
+	fmt.Fprintf(logFile, "=== Resetting to commit ===\n")
+	fmt.Fprintf(logFile, "Commit: %s\n", commit)
+	fmt.Fprintf(logFile, "========================\n\n")
+
+	if err := resetCmd.Run(); err != nil {
+		return fmt.Errorf("failed to reset to commit %s: %w", commit, err)
+	}
+
 	// Parse options and add branch parameter
 	args := []string{}
 	if tr.config.Options != "" {
@@ -94,13 +145,13 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 		args = append(args, optionArgs...)
 	}
 
-	scriptPath := filepath.Join(tr.config.RepoPath, tr.config.TestScript)
+	scriptPath := filepath.Join(tempDir, tr.config.TestScript)
 	cmd := exec.CommandContext(tr.ctx, scriptPath, args...)
-	cmd.Dir = tr.config.RepoPath
+	cmd.Dir = tempDir
 
 	// Log the full command that will be executed
 	fullCommand := fmt.Sprintf("%s %s", scriptPath, strings.Join(args, " "))
-	slog.Debug("Executing test command", "command", fullCommand)
+	slog.Debug("Executing test command", "command", fullCommand, "working_dir", tempDir)
 
 	// Create writers that output to both console and log file
 	cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
@@ -112,7 +163,7 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	fmt.Fprintf(logFile, "Commit: %s\n", commit)
 	fmt.Fprintf(logFile, "Timestamp: %s\n", time.Now().Format(time.RFC3339))
 	fmt.Fprintf(logFile, "Command: %s\n", fullCommand)
-	fmt.Fprintf(logFile, "Working Directory: %s\n", tr.config.RepoPath)
+	fmt.Fprintf(logFile, "Working Directory: %s\n", tempDir)
 	fmt.Fprintf(logFile, "==================\n\n")
 
 	return cmd.Run()

@@ -69,21 +69,13 @@ func (sm *StateManager) SetBranchState(branch string, state *BranchState) {
 	sm.branchStates[branch] = state
 }
 
-func (sm *StateManager) UpdateBranchState(branch, commit string, maxRunsPerDay int) {
+func (sm *StateManager) UpdateBranchState(branch, commit string) {
 	sm.stateMutex.Lock()
 	defer sm.stateMutex.Unlock()
 
 	state := sm.branchStates[branch]
 	now := time.Now()
-	today := now.Format("2006-01-02")
 
 	state.LastCommit = commit
 	state.LastRunTime = now
-
-	if state.LastRunDate != today {
-		state.RunsToday = 1
-		state.LastRunDate = today
-	} else {
-		state.RunsToday++
-	}
 }

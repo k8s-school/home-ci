@@ -63,7 +63,7 @@ func NewMonitor(cfg config.Config) (*Monitor, error) {
 
 func (m *Monitor) Start() error {
 	slog.Debug("Starting Git CI Monitor")
-	slog.Debug("Configuration", "repository", m.config.RepoPath, "check_interval", m.config.CheckInterval, "max_runs_per_day", m.config.MaxRunsPerDay, "max_concurrent_runs", m.config.MaxConcurrentRuns, "max_commit_age", m.config.MaxCommitAge, "options", m.config.Options)
+	slog.Debug("Configuration", "repository", m.config.RepoPath, "check_interval", m.config.CheckInterval, "max_concurrent_runs", m.config.MaxConcurrentRuns, "max_commit_age", m.config.MaxCommitAge, "options", m.config.Options)
 
 	// Start test runner goroutine
 	go m.testRunner.Start()
@@ -156,22 +156,12 @@ func (m *Monitor) processBranchWithDateFilter(branchName string) error {
 		m.stateManager.SetBranchState(branchName, state)
 	}
 
-	// Check daily limit
-	today := time.Now().Format("2006-01-02")
-	if state.LastRunDate == today && state.RunsToday >= m.config.MaxRunsPerDay {
-		slog.Debug("Daily limit reached", "branch", branchName, "runs_today", state.RunsToday, "max_runs", m.config.MaxRunsPerDay)
-
-		// Update the last commit hash but don't run tests
-		state.LastCommit = commitHash
-		return nil
-	}
-
 	// Queue the test job
 	job := runner.TestJob{Branch: branchName, Commit: commitHash}
 	if m.testRunner.QueueTestJob(job) {
 		// Update state after queuing
-		m.stateManager.UpdateBranchState(branchName, commitHash, m.config.MaxRunsPerDay)
-		slog.Debug("Updated state", "branch", branchName, "runs_today", state.RunsToday+1, "max_runs", m.config.MaxRunsPerDay)
+		m.stateManager.UpdateBranchState(branchName, commitHash)
+		slog.Debug("Updated state", "branch", branchName)
 	}
 
 	return nil

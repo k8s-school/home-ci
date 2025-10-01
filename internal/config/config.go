@@ -7,14 +7,25 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type GitHubActionsDispatch struct {
+	Enabled    bool   `yaml:"enabled"`
+	GitHubRepo string `yaml:"github_repo"`
+}
+
+type Cleanup struct {
+	AfterE2E bool   `yaml:"after_e2e"`
+	Script   string `yaml:"script"`
+}
+
 type Config struct {
-	RepoPath           string        `yaml:"repo_path"`
-	CheckInterval      time.Duration `yaml:"check_interval"`
-	TestScript         string        `yaml:"test_script"`
-	MaxRunsPerDay      int           `yaml:"max_runs_per_day"`
-	MaxConcurrentRuns  int           `yaml:"max_concurrent_runs"`
-	Options            string        `yaml:"options"`
-	MaxCommitAge       time.Duration `yaml:"max_commit_age"`
+	RepoPath               string                 `yaml:"repo_path"`
+	CheckInterval          time.Duration          `yaml:"check_interval"`
+	TestScript             string                 `yaml:"test_script"`
+	MaxConcurrentRuns      int                    `yaml:"max_concurrent_runs"`
+	Options                string                 `yaml:"options"`
+	MaxCommitAge           time.Duration          `yaml:"max_commit_age"`
+	Cleanup                Cleanup                `yaml:"cleanup"`
+	GitHubActionsDispatch  GitHubActionsDispatch  `yaml:"github_actions_dispatch"`
 }
 
 func Load(path string) (Config, error) {
@@ -25,10 +36,17 @@ func Load(path string) (Config, error) {
 		RepoPath:          ".",
 		CheckInterval:     5 * time.Minute,
 		TestScript:        "./e2e/fink-ci.sh",
-		MaxRunsPerDay:     1,
 		MaxConcurrentRuns: 2,
 		Options:           "-c -i ztf",
 		MaxCommitAge:      240 * time.Hour, // 10 days
+		Cleanup: Cleanup{
+			AfterE2E: true,
+			Script:   "",
+		},
+		GitHubActionsDispatch: GitHubActionsDispatch{
+			Enabled:    false,
+			GitHubRepo: "",
+		},
 	}
 
 	if path == "" {
