@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/k8s-school/home-ci/internal/config"
 )
 
@@ -96,47 +98,59 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 
 	slog.Debug("Created temporary repository", "temp_dir", tempDir)
 
-	// Clone the repository to the temporary directory
-	cloneCmd := exec.CommandContext(tr.ctx, "git", "clone", tr.config.RepoPath, tempDir)
-	cloneCmd.Stdout = io.MultiWriter(os.Stdout, logFile)
-	cloneCmd.Stderr = io.MultiWriter(os.Stderr, logFile)
-
 	fmt.Fprintf(logFile, "=== Cloning Repository ===\n")
 	fmt.Fprintf(logFile, "Source: %s\n", tr.config.RepoPath)
 	fmt.Fprintf(logFile, "Destination: %s\n", tempDir)
-	fmt.Fprintf(logFile, "========================\n\n")
-
-	if err := cloneCmd.Run(); err != nil {
-		return fmt.Errorf("failed to clone repository to %s: %w", tempDir, err)
-	}
-
-	// Checkout the specific branch and commit
-	checkoutCmd := exec.CommandContext(tr.ctx, "git", "checkout", branch)
-	checkoutCmd.Dir = tempDir
-	checkoutCmd.Stdout = io.MultiWriter(os.Stdout, logFile)
-	checkoutCmd.Stderr = io.MultiWriter(os.Stderr, logFile)
-
-	fmt.Fprintf(logFile, "=== Checking out branch ===\n")
 	fmt.Fprintf(logFile, "Branch: %s\n", branch)
-	fmt.Fprintf(logFile, "========================\n\n")
-
-	if err := checkoutCmd.Run(); err != nil {
-		return fmt.Errorf("failed to checkout branch %s: %w", branch, err)
-	}
-
-	// Reset to the specific commit
-	resetCmd := exec.CommandContext(tr.ctx, "git", "reset", "--hard", commit)
-	resetCmd.Dir = tempDir
-	resetCmd.Stdout = io.MultiWriter(os.Stdout, logFile)
-	resetCmd.Stderr = io.MultiWriter(os.Stderr, logFile)
-
-	fmt.Fprintf(logFile, "=== Resetting to commit ===\n")
 	fmt.Fprintf(logFile, "Commit: %s\n", commit)
 	fmt.Fprintf(logFile, "========================\n\n")
 
-	if err := resetCmd.Run(); err != nil {
+	// Clone the repository to the temporary directory using go-git
+	repo, err := git.PlainClone(tempDir, false, &git.CloneOptions{
+		URL: tr.config.RepoPath,
+	})
+	if err != nil {
+		fmt.Fprintf(logFile, "Failed to clone repository: %v\n", err)
+		return fmt.Errorf("failed to clone repository to %s: %w", tempDir, err)
+	}
+
+	fmt.Fprintf(logFile, "Repository cloned successfully\n")
+
+	// Get the worktree
+	worktree, err := repo.Worktree()
+	if err != nil {
+		fmt.Fprintf(logFile, "Failed to get worktree: %v\n", err)
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	// Parse branch name to get reference name
+	branchRef := plumbing.ReferenceName(fmt.Sprintf("refs/remotes/origin/%s", strings.TrimPrefix(branch, "origin/")))
+
+	// Checkout the specific branch
+	err = worktree.Checkout(&git.CheckoutOptions{
+		Branch: branchRef,
+		Create: true,
+	})
+	if err != nil {
+		fmt.Fprintf(logFile, "Failed to checkout branch %s: %v\n", branch, err)
+		return fmt.Errorf("failed to checkout branch %s: %w", branch, err)
+	}
+
+	fmt.Fprintf(logFile, "Checked out branch %s successfully\n", branch)
+
+	// Reset to the specific commit
+	commitHash := plumbing.NewHash(commit)
+	err = worktree.Reset(&git.ResetOptions{
+		Commit: commitHash,
+		Mode:   git.HardReset,
+	})
+	if err != nil {
+		fmt.Fprintf(logFile, "Failed to reset to commit %s: %v\n", commit, err)
 		return fmt.Errorf("failed to reset to commit %s: %w", commit, err)
 	}
+
+	fmt.Fprintf(logFile, "Reset to commit %s successfully\n", commit)
+	fmt.Fprintf(logFile, "========================\n\n")
 
 	// Parse options and add branch parameter
 	args := []string{}
