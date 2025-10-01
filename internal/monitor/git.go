@@ -28,38 +28,37 @@ func NewGitRepository(repoPath string) (*GitRepository, error) {
 }
 
 func (gr *GitRepository) FetchRemote() error {
+	// Only used when fetch_remote is enabled
 	cmd := exec.Command("git", "fetch", "origin")
 	cmd.Dir = gr.repoPath
 	return cmd.Run()
 }
 
-func (gr *GitRepository) GetRemoteBranches() ([]string, error) {
-	remote, err := gr.repo.Remote("origin")
-	if err != nil {
-		return nil, err
-	}
+func (gr *GitRepository) GetBranches() ([]string, error) {
+	return gr.GetLocalBranches()
+}
 
-	refs, err := remote.List(&git.ListOptions{})
+func (gr *GitRepository) GetLocalBranches() ([]string, error) {
+	refs, err := gr.repo.References()
 	if err != nil {
 		return nil, err
 	}
 
 	var branches []string
-	for _, ref := range refs {
+	err = refs.ForEach(func(ref *plumbing.Reference) error {
 		if ref.Name().IsBranch() {
 			branchName := ref.Name().Short()
-			if branchName != "HEAD" {
-				branches = append(branches, branchName)
-			}
+			branches = append(branches, branchName)
 		}
-	}
+		return nil
+	})
 
-	return branches, nil
+	return branches, err
 }
 
 func (gr *GitRepository) GetLatestCommitForBranch(branchName string, maxCommitAge time.Duration) (*object.Commit, error) {
-	// Get the latest commit for this branch
-	refName := fmt.Sprintf("refs/remotes/origin/%s", branchName)
+	// Get the latest commit for this local branch
+	refName := fmt.Sprintf("refs/heads/%s", branchName)
 	ref, err := gr.repo.Reference(plumbing.ReferenceName(refName), true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get reference for branch %s: %w", branchName, err)

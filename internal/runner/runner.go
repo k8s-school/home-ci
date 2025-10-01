@@ -105,16 +105,22 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	fmt.Fprintf(logFile, "Commit: %s\n", commit)
 	fmt.Fprintf(logFile, "========================\n\n")
 
-	// Clone the repository to the temporary directory using go-git
+	// Clean branch name (remove origin/ prefix if present)
+	cleanBranchName := strings.TrimPrefix(branch, "origin/")
+	branchRefName := plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", cleanBranchName))
+
+	// Clone the repository with single branch (equivalent to git clone --single-branch --branch <branchname>)
 	repo, err := git.PlainClone(tempDir, false, &git.CloneOptions{
-		URL: tr.config.RepoPath,
+		URL:           tr.config.RepoPath,
+		ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", cleanBranchName)),
+		SingleBranch:  true,
 	})
 	if err != nil {
 		fmt.Fprintf(logFile, "Failed to clone repository: %v\n", err)
 		return fmt.Errorf("failed to clone repository to %s: %w", tempDir, err)
 	}
 
-	fmt.Fprintf(logFile, "Repository cloned successfully\n")
+	fmt.Fprintf(logFile, "Repository cloned successfully (single branch: %s)\n", cleanBranchName)
 
 	// Get the worktree
 	worktree, err := repo.Worktree()
@@ -123,20 +129,16 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 		return fmt.Errorf("failed to get worktree: %w", err)
 	}
 
-	// Parse branch name to get reference name
-	branchRef := plumbing.ReferenceName(fmt.Sprintf("refs/remotes/origin/%s", strings.TrimPrefix(branch, "origin/")))
-
-	// Checkout the specific branch
+	// Checkout the branch (should already be on it, but make sure)
 	err = worktree.Checkout(&git.CheckoutOptions{
-		Branch: branchRef,
-		Create: true,
+		Branch: branchRefName,
 	})
 	if err != nil {
-		fmt.Fprintf(logFile, "Failed to checkout branch %s: %v\n", branch, err)
-		return fmt.Errorf("failed to checkout branch %s: %w", branch, err)
+		fmt.Fprintf(logFile, "Failed to checkout branch %s: %v\n", cleanBranchName, err)
+		return fmt.Errorf("failed to checkout branch %s: %w", cleanBranchName, err)
 	}
 
-	fmt.Fprintf(logFile, "Checked out branch %s successfully\n", branch)
+	fmt.Fprintf(logFile, "Checked out branch %s successfully\n", cleanBranchName)
 
 	// Reset to the specific commit
 	commitHash := plumbing.NewHash(commit)

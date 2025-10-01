@@ -101,15 +101,17 @@ func (m *Monitor) Stop() {
 func (m *Monitor) checkForUpdates() error {
 	slog.Debug("Checking for updates")
 
-	// Fetch latest changes
-	if err := m.gitRepo.FetchRemote(); err != nil {
-		return fmt.Errorf("failed to fetch remote: %w", err)
+	// Fetch latest changes only if enabled
+	if m.config.FetchRemote {
+		if err := m.gitRepo.FetchRemote(); err != nil {
+			return fmt.Errorf("failed to fetch remote: %w", err)
+		}
 	}
 
-	// Get all remote branches
-	branches, err := m.gitRepo.GetRemoteBranches()
+	// Get all branches
+	branches, err := m.gitRepo.GetBranches()
 	if err != nil {
-		return fmt.Errorf("failed to get remote branches: %w", err)
+		return fmt.Errorf("failed to get branches: %w", err)
 	}
 
 	for _, branch := range branches {

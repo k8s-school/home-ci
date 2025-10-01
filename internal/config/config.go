@@ -24,6 +24,7 @@ type Config struct {
 	MaxConcurrentRuns      int                    `yaml:"max_concurrent_runs"`
 	Options                string                 `yaml:"options"`
 	MaxCommitAge           time.Duration          `yaml:"max_commit_age"`
+	FetchRemote            bool                   `yaml:"fetch_remote"`
 	Cleanup                Cleanup                `yaml:"cleanup"`
 	GitHubActionsDispatch  GitHubActionsDispatch  `yaml:"github_actions_dispatch"`
 }
@@ -39,6 +40,7 @@ func Load(path string) (Config, error) {
 		MaxConcurrentRuns: 2,
 		Options:           "-c -i ztf",
 		MaxCommitAge:      240 * time.Hour, // 10 days
+		FetchRemote:       true,            // Par défaut, on fetch le remote
 		Cleanup: Cleanup{
 			AfterE2E: true,
 			Script:   "",

@@ -12,5 +12,7 @@ echo "Building project in $PROJECT_DIR"
 go build $PROJECT_DIR
 
 
+
 echo "Running tests..."
+$DIR/setup-test-repo.sh
 $PROJECT_DIR/home-ci -c $DIR/config.yaml -v 5

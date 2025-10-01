@@ -1,6 +1,14 @@
-repo_path: "/home/fjammes/src/github.com/k8s-school/home-ci-e2e"
-check_interval: 10s 
-test_script: "e2e-test.sh"
-max_runs_per_day: 1
-options: ""
+repo_path: "/tmp/test-repo-local"
+check_interval: 5m
+test_script: "_e2e/run-e2e.sh"
+options: "-c -i ztf"
 max_commit_age: 240h
+fetch_remote: false
+
+cleanup:
+  after_e2e: true
+  script: "./_e2e/cleanup_e2e.sh"
+
+github_actions_dispatch:
+  enabled: true
+  github_repo: "astrolabsoftware/fink-broker"
