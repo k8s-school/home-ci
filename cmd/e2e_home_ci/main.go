@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -26,6 +27,14 @@ const (
 	TestLong
 )
 
+// RunningTest represents a test currently in progress
+type RunningTest struct {
+	Branch   string
+	Commit   string
+	LogFile  string
+	Started  time.Time
+}
+
 type E2ETestHarness struct {
 	testType      TestType
 	duration      time.Duration
@@ -35,10 +44,12 @@ type E2ETestHarness struct {
 	homeCICancel  context.CancelFunc
 
 	// Statistics
-	commitsCreated    int
-	branchesCreated   int
-	testsDetected     int
-	timeoutDetected   bool
+	commitsCreated       int
+	branchesCreated      int
+	runningTests         []RunningTest
+	totalTestsDetected   int  // Total number of tests detected (for statistics)
+	timeoutDetected      bool
+	logCheckCount        int // Counter for periodic display
 }
 
 func NewE2ETestHarness(testType TestType, duration time.Duration) *E2ETestHarness {
@@ -403,17 +414,58 @@ func (th *E2ETestHarness) monitorLogs() {
 			case <-th.homeCIContext.Done():
 				return
 			case <-time.After(2 * time.Second):
-				// Search for log files in the .home-ci directory
-				if err := th.checkLogsForActivity(homeCIDir); err != nil {
-					log.Printf("Error checking logs: %v", err)
+				// Check state.json for running tests
+				if err := th.checkStateForActivity(homeCIDir); err != nil {
+					log.Printf("Error checking state: %v", err)
 				}
 			}
 		}
 	}()
 }
 
-// checkLogsForActivity checks logs for test execution and timeouts
-func (th *E2ETestHarness) checkLogsForActivity(homeCIDir string) error {
+// checkStateForActivity checks state.json for test execution and timeouts
+func (th *E2ETestHarness) checkStateForActivity(homeCIDir string) error {
+	stateFile := filepath.Join(homeCIDir, "state.json")
+
+	// Check if state.json exists
+	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
+		return nil // No state file yet
+	}
+
+	// Read and parse state.json
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		return err
+	}
+
+	var state struct {
+		RunningTests []RunningTest `json:"running_tests"`
+	}
+
+	if err := json.Unmarshal(data, &state); err != nil {
+		return err
+	}
+
+	// Update our running tests from state
+	th.runningTests = state.RunningTests
+	th.totalTestsDetected = len(state.RunningTests)
+
+	// Display running tests every 15 checks (approximately every 30 seconds)
+	th.logCheckCount++
+	if th.logCheckCount%15 == 0 {
+		th.displayRunningTests()
+	}
+
+	// Check for timeout in logs if it's a timeout test
+	if th.testType == TestTimeout {
+		return th.checkLogsForTimeout(homeCIDir)
+	}
+
+	return nil
+}
+
+// checkLogsForTimeout checks logs for timeout messages (used only for timeout tests)
+func (th *E2ETestHarness) checkLogsForTimeout(homeCIDir string) error {
 	files, err := os.ReadDir(homeCIDir)
 	if err != nil {
 		return err
@@ -425,7 +477,7 @@ func (th *E2ETestHarness) checkLogsForActivity(homeCIDir string) error {
 		}
 
 		logPath := filepath.Join(homeCIDir, file.Name())
-		if err := th.scanLogFile(logPath); err != nil {
+		if err := th.scanLogFileForTimeout(logPath); err != nil {
 			log.Printf("Error reading log file %s: %v", file.Name(), err)
 		}
 	}
@@ -433,8 +485,8 @@ func (th *E2ETestHarness) checkLogsForActivity(homeCIDir string) error {
 	return nil
 }
 
-// scanLogFile scans a log file for relevant messages
-func (th *E2ETestHarness) scanLogFile(logPath string) error {
+// scanLogFileForTimeout scans a log file for timeout messages only
+func (th *E2ETestHarness) scanLogFileForTimeout(logPath string) error {
 	file, err := os.Open(logPath)
 	if err != nil {
 		return err
@@ -445,17 +497,10 @@ func (th *E2ETestHarness) scanLogFile(logPath string) error {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Check for test execution
-		if strings.Contains(line, "=== Fink E2E Test Suite ===") ||
-		   strings.Contains(line, "=== Slow Test Suite") {
-			th.testsDetected++
-			log.Printf("🧪 Test execution detected! Total tests executed: %d", th.testsDetected)
-		}
-
 		// Check for timeout (only relevant for timeout tests)
-		if th.testType == TestTimeout && (strings.Contains(line, "TEST TIMEOUT") ||
+		if strings.Contains(line, "TEST TIMEOUT") ||
 		   strings.Contains(line, "Test execution timed out") ||
-		   strings.Contains(line, "Test was killed due to timeout")) {
+		   strings.Contains(line, "Test was killed due to timeout") {
 			if !th.timeoutDetected {
 				th.timeoutDetected = true
 				log.Printf("🕐 Timeout detected in logs: %s", strings.TrimSpace(line))
@@ -465,6 +510,31 @@ func (th *E2ETestHarness) scanLogFile(logPath string) error {
 
 	return scanner.Err()
 }
+
+
+// displayRunningTests shows current running tests with their details
+func (th *E2ETestHarness) displayRunningTests() {
+	if len(th.runningTests) == 0 {
+		log.Printf("📊 No tests currently running")
+		return
+	}
+
+	log.Printf("📊 Currently running tests (%d):", len(th.runningTests))
+	for i, test := range th.runningTests {
+		duration := time.Since(test.Started).Truncate(time.Second)
+		log.Printf("   %d. Branch: %s, Commit: %s", i+1, test.Branch, test.Commit[:min(8, len(test.Commit))])
+		log.Printf("      LogFile: %s, Running: %v", test.LogFile, duration)
+	}
+}
+
+// helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 
 // simulateActivity simulates development activity
 func (th *E2ETestHarness) simulateActivity() {
@@ -509,7 +579,7 @@ func (th *E2ETestHarness) printStatistics() {
 	log.Printf("   Duration: %v", th.duration)
 	log.Printf("   Commits created: %d", th.commitsCreated)
 	log.Printf("   Branches created: %d", th.branchesCreated)
-	log.Printf("   Tests detected: %d", th.testsDetected)
+	log.Printf("   Tests detected: %d", th.totalTestsDetected)
 
 	if th.testType == TestTimeout {
 		log.Printf("   Timeout detected: %v", th.timeoutDetected)
@@ -519,9 +589,9 @@ func (th *E2ETestHarness) printStatistics() {
 			log.Println("✅ Timeout detection working correctly!")
 		}
 	} else {
-		if th.commitsCreated > 0 && th.testsDetected == 0 {
+		if th.commitsCreated > 0 && th.totalTestsDetected == 0 {
 			log.Println("⚠️  WARNING: No test executions detected despite commits being created!")
-		} else if th.testsDetected > 0 {
+		} else if th.totalTestsDetected > 0 {
 			log.Println("✅ Test execution detection working correctly!")
 		}
 	}
@@ -681,7 +751,7 @@ func main() {
 	if testType == TestTimeout {
 		success = th.timeoutDetected
 	} else {
-		success = th.testsDetected > 0
+		success = th.totalTestsDetected > 0
 	}
 
 	if success {

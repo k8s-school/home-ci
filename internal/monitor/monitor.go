@@ -39,7 +39,7 @@ func NewMonitor(cfg config.Config) (*Monitor, error) {
 	stateFile := filepath.Join(homeCIDir, "state.json")
 	stateManager := NewStateManager(stateFile)
 
-	testRunner := runner.NewTestRunner(cfg, logDir, ctx)
+	testRunner := runner.NewTestRunner(cfg, logDir, ctx, stateManager)
 
 	m := &Monitor{
 		config:       cfg,

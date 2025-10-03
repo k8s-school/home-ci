@@ -16,21 +16,40 @@ import (
 	"github.com/k8s-school/home-ci/internal/config"
 )
 
-type TestRunner struct {
-	config    config.Config
-	logDir    string
-	testQueue chan TestJob
-	ctx       context.Context
-	semaphore chan struct{} // Semaphore to limit concurrency
+// StateManager interface to avoid circular imports
+type StateManager interface {
+	AddRunningTest(test interface{})
+	RemoveRunningTest(branch, commit string)
+	GetRunningTests() []interface{}
+	CleanupOldRunningTests(maxAge time.Duration)
+	SaveState() error
 }
 
-func NewTestRunner(cfg config.Config, logDir string, ctx context.Context) *TestRunner {
+type RunningTest struct {
+	Branch    string    `json:"branch"`
+	Commit    string    `json:"commit"`
+	LogFile   string    `json:"log_file"`
+	StartTime time.Time `json:"start_time"`
+	PID       int       `json:"pid,omitempty"`
+}
+
+type TestRunner struct {
+	config       config.Config
+	logDir       string
+	testQueue    chan TestJob
+	ctx          context.Context
+	semaphore    chan struct{} // Semaphore to limit concurrency
+	stateManager StateManager  // State manager for tracking running tests
+}
+
+func NewTestRunner(cfg config.Config, logDir string, ctx context.Context, stateManager StateManager) *TestRunner {
 	return &TestRunner{
-		config:    cfg,
-		logDir:    logDir,
-		testQueue: make(chan TestJob, 100),
-		ctx:       ctx,
-		semaphore: make(chan struct{}, cfg.MaxConcurrentRuns),
+		config:       cfg,
+		logDir:       logDir,
+		testQueue:    make(chan TestJob, 100),
+		ctx:          ctx,
+		semaphore:    make(chan struct{}, cfg.MaxConcurrentRuns),
+		stateManager: stateManager,
 	}
 }
 
@@ -79,6 +98,24 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	branchFile := strings.ReplaceAll(branch, "/", "-")
 	logFileName := fmt.Sprintf("%s_%s_%s.log", timestamp, branchFile, commit[:8])
 	logFilePath := filepath.Join(tr.logDir, logFileName)
+
+	// Register test as running in state
+	runningTest := RunningTest{
+		Branch:    branch,
+		Commit:    commit,
+		LogFile:   logFileName,
+		StartTime: time.Now(),
+	}
+	if tr.stateManager != nil {
+		tr.stateManager.AddRunningTest(runningTest)
+		tr.stateManager.SaveState()
+
+		// Ensure test is removed from state even if function exits early
+		defer func() {
+			tr.stateManager.RemoveRunningTest(branch, commit)
+			tr.stateManager.SaveState()
+		}()
+	}
 
 	// Create log file
 	logFile, err := os.Create(logFilePath)
@@ -210,6 +247,8 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	fmt.Fprintf(logFile, "\n=== Test Completed ===\n")
 	fmt.Fprintf(logFile, "Duration: %s\n", duration)
 	fmt.Fprintf(logFile, "======================\n")
+
+	// Note: test is automatically removed from state by defer
 
 	return err
 }
