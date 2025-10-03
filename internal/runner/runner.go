@@ -21,7 +21,7 @@ type TestRunner struct {
 	logDir    string
 	testQueue chan TestJob
 	ctx       context.Context
-	semaphore chan struct{} // Semaphore pour limiter la concurrence
+	semaphore chan struct{} // Semaphore to limit concurrency
 }
 
 func NewTestRunner(cfg config.Config, logDir string, ctx context.Context) *TestRunner {
@@ -38,11 +38,11 @@ func (tr *TestRunner) Start() {
 	slog.Debug("Starting test runner", "max_concurrent_runs", tr.config.MaxConcurrentRuns)
 
 	for job := range tr.testQueue {
-		// Lancer chaque job dans une goroutine séparée
+		// Launch each job in a separate goroutine
 		go func(job TestJob) {
-			// Acquérir un slot dans le semaphore
+			// Acquire a slot in the semaphore
 			tr.semaphore <- struct{}{}
-			defer func() { <-tr.semaphore }() // Libérer le slot à la fin
+			defer func() { <-tr.semaphore }() // Release the slot at the end
 
 			slog.Debug("Starting tests", "branch", job.Branch, "commit", job.Commit[:8])
 
@@ -71,7 +71,7 @@ func (tr *TestRunner) Close() {
 }
 
 func (tr *TestRunner) runTests(branch, commit string) error {
-	slog.Debug("Running tests", "branch", branch, "commit", commit[:8])
+	slog.Debug("Running tests", "branch", branch, "commit", commit[:8], "timeout", tr.config.TestTimeout)
 
 	// Create log file name with timestamp, branch, and commit hash
 	timestamp := time.Now().Format("20060102-150405")
@@ -161,8 +161,12 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 		args = append(args, optionArgs...)
 	}
 
+	// Create context with timeout
+	testCtx, testCancel := context.WithTimeout(context.Background(), tr.config.TestTimeout)
+	defer testCancel()
+
 	scriptPath := filepath.Join(tempDir, tr.config.TestScript)
-	cmd := exec.CommandContext(tr.ctx, scriptPath, args...)
+	cmd := exec.CommandContext(testCtx, scriptPath, args...)
 	cmd.Dir = tempDir
 
 	// Log the full command that will be executed
@@ -180,7 +184,32 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	fmt.Fprintf(logFile, "Timestamp: %s\n", time.Now().Format(time.RFC3339))
 	fmt.Fprintf(logFile, "Command: %s\n", fullCommand)
 	fmt.Fprintf(logFile, "Working Directory: %s\n", tempDir)
+	fmt.Fprintf(logFile, "Timeout: %s\n", tr.config.TestTimeout)
 	fmt.Fprintf(logFile, "==================\n\n")
 
-	return cmd.Run()
+	startTime := time.Now()
+	err = cmd.Run()
+	duration := time.Since(startTime)
+
+	// Check if the error was due to timeout
+	if err != nil {
+		if testCtx.Err() == context.DeadlineExceeded {
+			timeoutMsg := fmt.Sprintf("Test execution timed out after %s (limit: %s)", duration, tr.config.TestTimeout)
+			slog.Error("Test timeout", "branch", branch, "commit", commit[:8], "duration", duration, "timeout", tr.config.TestTimeout)
+			fmt.Fprintf(logFile, "\n=== TEST TIMEOUT ===\n")
+			fmt.Fprintf(logFile, "Test execution timed out after %s\n", duration)
+			fmt.Fprintf(logFile, "Timeout limit: %s\n", tr.config.TestTimeout)
+			fmt.Fprintf(logFile, "Test was killed due to timeout\n")
+			fmt.Fprintf(logFile, "===================\n")
+			return fmt.Errorf("test timeout: %s", timeoutMsg)
+		}
+	}
+
+	// Log completion time
+	slog.Debug("Test completed", "branch", branch, "commit", commit[:8], "duration", duration)
+	fmt.Fprintf(logFile, "\n=== Test Completed ===\n")
+	fmt.Fprintf(logFile, "Duration: %s\n", duration)
+	fmt.Fprintf(logFile, "======================\n")
+
+	return err
 }

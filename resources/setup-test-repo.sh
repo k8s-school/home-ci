@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Désactiver le pager git pour éviter les interactions
+# Disable git pager to avoid interactions
 export GIT_PAGER=cat
 
 # Configuration
@@ -10,13 +10,13 @@ REPO_PATH="/tmp/test-repo-local"
 echo "=== Setting up test repository ==="
 echo "Repository path: $REPO_PATH"
 
-# Nettoyer le dépôt existant s'il y en a un
+# Clean up existing repository if there is one
 if [ -d "$REPO_PATH" ]; then
     echo "Removing existing test repository..."
     rm -rf "$REPO_PATH"
 fi
 
-# Créer le nouveau dépôt
+# Create the new repository
 echo "Creating new test repository..."
 mkdir -p "$REPO_PATH"
 cd "$REPO_PATH"
@@ -25,14 +25,14 @@ cd "$REPO_PATH"
 git init
 git config user.name "CI Test"
 git config user.email "ci-test@example.com"
-# Configuration pour éviter les interactions
+# Configuration to avoid interactions
 git config advice.detachedHead false
 git config init.defaultBranch main
 git config pager.branch false
 git config pager.log false
 git config core.pager cat
 
-# Créer la structure de base
+# Create basic structure
 echo "Creating basic structure..."
 mkdir -p _e2e
 
@@ -42,7 +42,7 @@ cp "$SCRIPT_DIR/run-e2e.sh" _e2e/run-e2e.sh
 
 chmod +x _e2e/run-e2e.sh
 
-# Créer quelques fichiers de base
+# Create some basic files
 echo "# Test Repository" > README.md
 echo "node_modules/" > .gitignore
 echo "*.log" >> .gitignore
@@ -52,7 +52,7 @@ git add .
 git commit -m "Initial commit"
 git branch -m main
 
-# Créer quelques branches de test avec des commits
+# Create some test branches with commits
 echo "Creating test branches..."
 
 # Branch feature/test1
@@ -87,7 +87,7 @@ echo "Main branch update 2" >> main-update.txt
 git add main-update.txt
 git commit -m "Main update 2"
 
-# Afficher l'état final
+# Display final state
 echo ""
 echo "=== Repository setup complete ==="
 echo "Available branches:"

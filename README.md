@@ -1,102 +1,125 @@
-# Git CI Monitor
+# Home-CI
 
-Ce programme Go surveille automatiquement un repository Git pour détecter les nouveaux commits sur toutes les branches et lance les tests e2e de manière séquentielle.
+This Go program automatically monitors a Git repository to detect new commits on all branches and launches e2e tests sequentially.
 
-## Fonctionnalités
+## Features
 
-- **Surveillance automatique** : Vérifie périodiquement les nouveaux commits sur toutes les branches distantes
-- **Limitation quotidienne** : Maximum d'un run de tests par branche par jour
-- **Tests séquentiels** : Un seul test à la fois pour éviter les conflits de ressources
-- **Configuration flexible** : Options personnalisables via fichier JSON
-- **Persistance d'état** : Sauvegarde l'état entre les redémarrages
+- **Automatic monitoring**: Periodically checks for new commits on all remote branches
+- **Concurrent execution**: Configurable number of concurrent test runs
+- **Sequential testing**: Prevents resource conflicts by managing concurrent execution
+- **Flexible configuration**: Customizable options via YAML file
+- **State persistence**: Saves state between restarts
+- **Commit age filtering**: Only processes commits within a specified time window
 
 ## Installation
 
 ```bash
-cd git-ci-monitor
+cd home-ci
 go mod tidy
-go build -o git-ci-monitor
+make build
+```
+
+Or manually:
+
+```bash
+go build -o home-ci ./cmd/home-ci
 ```
 
 ## Configuration
 
-Créez un fichier `config.json` :
+Create a `config.yaml` file:
 
-```json
-{
-  "repo_path": "/path/to/fink-broker",
-  "check_interval": "5m",
-  "test_script": "./e2e/fink-ci.sh",
-  "max_runs_per_day": 1,
-  "options": "-c -i ztf"
-}
+```yaml
+repo_path: "/path/to/your-repo"
+check_interval: 5m
+test_script: "./e2e/your-test-script.sh"
+max_concurrent_runs: 2
+options: "-c -i ztf"
+max_commit_age: 240h
+test_timeout: 5m
+fetch_remote: true
+
+cleanup:
+  after_e2e: true
+  script: "./cleanup.sh"
+
+github_actions_dispatch:
+  enabled: false
+  github_repo: "owner/repo"
 ```
 
-### Paramètres
+### Parameters
 
-- `repo_path` : Chemin vers le repository fink-broker
-- `check_interval` : Intervalle de vérification (format Go duration: "5m", "1h", etc.)
-- `test_script` : Script de test à exécuter (généralement `./e2e/fink-ci.sh`)
-- `max_runs_per_day` : Nombre maximum de runs par branche par jour
-- `options` : Options à passer au script fink-ci.sh
+- `repo_path`: Path to the repository to monitor
+- `check_interval`: Check interval (Go duration format: "5m", "1h", etc.)
+- `test_script`: Test script to execute
+- `max_concurrent_runs`: Maximum number of concurrent test runs
+- `options`: Options to pass to the test script
+- `max_commit_age`: Maximum age of commits to process (e.g., "240h" for 10 days)
+- `test_timeout`: Maximum duration for test execution before timeout (e.g., "30s", "5m")
+- `fetch_remote`: Whether to fetch from remote repositories
 
-### Options pour fink-ci.sh
+### Test Script Options
 
-D'après le script `e2e/fink-ci.sh`, les options disponibles sont :
+According to the test scripts, available options include:
 
-- `-c` : Nettoie le cluster si les tests réussissent
-- `-s` : Utilise les algorithmes scientifiques pendant les tests
-- `-i <survey>` : Spécifie le survey d'entrée (par défaut: ztf)
-- `-b <branch>` : Nom de la branche (automatiquement ajouté par le monitor)
-- `-m` : Active le monitoring
+- `-c`: Clean up cluster if tests succeed
+- `-s`: Use scientific algorithms during tests
+- `-i <survey>`: Specify input survey (default: ztf)
+- `-b <branch>`: Branch name (automatically added by the monitor)
+- `-m`: Enable monitoring
 
-Exemples d'options :
-- `"-c -i ztf"` : Cleanup + survey ZTF
-- `"-c -s -i ztf"` : Cleanup + science + survey ZTF
-- `"-c -s -m -i ztf"` : Cleanup + science + monitoring + survey ZTF
+Option examples:
+- `"-c -i ztf"`: Cleanup + ZTF survey
+- `"-c -s -i ztf"`: Cleanup + science + ZTF survey
+- `"-c -s -m -i ztf"`: Cleanup + science + monitoring + ZTF survey
 
-## Utilisation
+## Usage
 
-### Démarrage
+### Starting
 
 ```bash
-# Avec fichier de configuration
-./git-ci-monitor config.json
+# With configuration file
+./home-ci -c config.yaml
 
-# Avec configuration par défaut
-./git-ci-monitor
+# With verbose logging
+./home-ci -c config.yaml -v
+
+# Show help
+./home-ci --help
 ```
 
-### Variables d'environnement requises
+### Required Environment Variables
 
-Le script fink-ci.sh nécessite :
+The test scripts may require:
 
 ```bash
 export TOKEN="your-github-token"
 export USER="your-username"
 ```
 
-### Fonctionnement
+### How it Works
 
-1. **Surveillance** : Le programme vérifie périodiquement les branches distantes
-2. **Détection** : Quand un nouveau commit est détecté, il est ajouté à la queue
-3. **Limitation** : Vérifie si la limite quotidienne n'est pas atteinte
-4. **Exécution** : Lance le script de test avec les bonnes options
-5. **Séquentiel** : Un seul test à la fois, les autres attendent dans la queue
+1. **Monitoring**: The program periodically checks remote branches
+2. **Detection**: When a new commit is detected, it's added to the queue
+3. **Filtering**: Only processes commits within the specified age limit
+4. **Execution**: Launches the test script with appropriate options
+5. **Concurrency**: Manages multiple test runs based on configuration
 
-### Fichiers générés
+### Generated Files
 
-- `.git-ci-monitor-state.json` : État persistant (derniers commits, compteurs quotidiens)
+- `.home-ci/state.json`: Persistent state (last commits, daily counters)
+- `.home-ci/*.log`: Test execution logs
 
 ## Logs
 
-Le programme affiche des logs détaillés :
+The program displays detailed logs:
 
 ```
 2024/01/15 10:00:00 Starting Git CI Monitor...
-2024/01/15 10:00:00 Repository: /path/to/fink-broker
+2024/01/15 10:00:00 Repository: /path/to/your-repo
 2024/01/15 10:00:00 Check interval: 5m0s
-2024/01/15 10:00:00 Max runs per day: 1
+2024/01/15 10:00:00 Max concurrent runs: 2
 2024/01/15 10:00:00 Options: -c -i ztf
 2024/01/15 10:00:00 Starting test runner...
 2024/01/15 10:00:00 Checking for updates...
@@ -105,17 +128,41 @@ Le programme affiche des logs détaillés :
 2024/01/15 10:05:00 Starting tests for branch feature-xyz, commit abcd1234
 ```
 
-## Arrêt gracieux
+## Graceful Shutdown
 
-Le programme peut être arrêté proprement avec Ctrl+C. Il sauvegarde automatiquement son état avant de se fermer.
+The program can be stopped cleanly with Ctrl+C. It automatically saves its state before closing.
 
 ## Architecture
 
-- **Monitor** : Structure principale qui gère la surveillance
-- **TestJob** : Job de test dans la queue
-- **BranchState** : État d'une branche (dernier commit, runs du jour)
-- **Config** : Configuration chargée depuis JSON
+- **Monitor**: Main structure that manages monitoring
+- **TestJob**: Test job in the queue
+- **BranchState**: State of a branch (last commit, daily runs)
+- **Config**: Configuration loaded from YAML
 
-Le programme utilise des goroutines pour :
-- La surveillance périodique des branches
-- L'exécution séquentielle des tests
+The program uses goroutines for:
+- Periodic branch monitoring
+- Concurrent test execution management
+- State management and persistence
+
+## Testing
+
+Run integration tests to validate home-ci functionality using the unified e2e test harness:
+
+```bash
+# Build the e2e test harness
+make build-e2e
+
+# Quick test (recommended for development) - 30 seconds
+make test-quick
+
+# Standard test - 3 minutes
+make test
+
+# Extended test - 10 minutes
+make test-long
+
+# Timeout validation test
+make test-timeout
+```
+
+The e2e test harness creates a temporary git repository, launches home-ci, simulates commits and branches, and verifies that tests are executed properly. All test scripts and configurations are embedded as resources, making the test harness completely self-contained.

@@ -7,7 +7,7 @@ echo "Current branch: $(git branch --show-current 2>/dev/null || echo 'detached'
 echo "Current commit: $(git rev-parse HEAD)"
 echo "Timestamp: $(date)"
 
-# Vérifier les arguments passés
+# Check passed arguments
 if [ $# -gt 0 ]; then
     echo "Arguments received: $*"
 fi
@@ -72,7 +72,7 @@ echo "Stopping test services..."
 sleep 1
 echo "✅ Test environment cleaned up"
 
-# Test du dispatch GitHub si activé
+# Test GitHub dispatch if enabled
 if [ "$TEST_GITHUB_DISPATCH" = "true" ]; then
     echo ""
     echo "=== GitHub Dispatch Test ==="
@@ -80,7 +80,7 @@ if [ "$TEST_GITHUB_DISPATCH" = "true" ]; then
     echo "Target repository: ${GITHUB_REPO:-'not specified'}"
 fi
 
-# Simuler des résultats de tests (90% de succès pour e2e)
+# Simulate test results (90% success rate for e2e)
 SUCCESS_RATE=9
 if [ $((RANDOM % 10)) -lt $SUCCESS_RATE ]; then
     echo ""

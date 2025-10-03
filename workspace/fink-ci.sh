@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script de test simulé pour home-ci
+# Simulated test script for home-ci
 # Usage: ./fink-ci.sh -b <branch> [autres options]
 
 set -e
@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Variables par défaut
+# Default variables
 BRANCH=""
 SIMULATE_FAILURE=false
 TEST_DURATION=5
@@ -47,7 +47,7 @@ while getopts "b:ci:fd:vh" opt; do
     esac
 done
 
-# Vérifier que la branche est spécifiée
+# Check that the branch is specified
 if [ -z "$BRANCH" ]; then
     echo -e "${RED}Error: Branch name is required (-b option)${NC}"
     exit 1
@@ -67,7 +67,7 @@ log() {
     esac
 }
 
-# Fonction de test simulé
+# Simulated test function
 run_test_phase() {
     local phase_name=$1
     local phase_duration=$2
@@ -91,12 +91,12 @@ log "INFO" "Starting tests for branch: $BRANCH"
 log "INFO" "Working directory: $(pwd)"
 log "INFO" "Git commit: $(git rev-parse HEAD 2>/dev/null || echo 'N/A')"
 
-# Simuler différentes phases de test
+# Simulate different test phases
 run_test_phase "Environment setup" 1
 run_test_phase "Unit tests" 2
 run_test_phase "Integration tests" $((TEST_DURATION - 3))
 
-# Simuler un échec si demandé
+# Simulate failure if requested
 if [ "$SIMULATE_FAILURE" = true ]; then
     log "ERROR" "Test failure simulation activated"
     log "ERROR" "Tests failed for branch $BRANCH"

@@ -29,18 +29,14 @@ func NewMonitor(cfg config.Config) (*Monitor, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Get current working directory for log files
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current working directory: %w", err)
+	// Create .home-ci directory in repo for logs and state
+	homeCIDir := filepath.Join(cfg.RepoPath, ".home-ci")
+	if err := os.MkdirAll(homeCIDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .home-ci directory: %w", err)
 	}
 
-	logDir := filepath.Join(cwd, "log")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create log directory: %w", err)
-	}
-
-	stateFile := filepath.Join(cfg.RepoPath, ".git-ci-monitor-state.json")
+	logDir := homeCIDir
+	stateFile := filepath.Join(homeCIDir, "state.json")
 	stateManager := NewStateManager(stateFile)
 
 	testRunner := runner.NewTestRunner(cfg, logDir, ctx)
