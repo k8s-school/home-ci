@@ -18,9 +18,9 @@ import (
 
 // StateManager interface to avoid circular imports
 type StateManager interface {
-	AddRunningTest(test interface{})
+	AddRunningTest(test RunningTest)
 	RemoveRunningTest(branch, commit string)
-	GetRunningTests() []interface{}
+	GetRunningTests() []RunningTest
 	CleanupOldRunningTests(maxAge time.Duration)
 	SaveState() error
 }

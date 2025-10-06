@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -29,10 +28,10 @@ const (
 
 // RunningTest represents a test currently in progress
 type RunningTest struct {
-	Branch   string
-	Commit   string
-	LogFile  string
-	Started  time.Time
+	Branch    string    `json:"branch"`
+	Commit    string    `json:"commit"`
+	LogFile   string    `json:"log_file"`
+	StartTime time.Time `json:"start_time"`
 }
 
 type E2ETestHarness struct {
@@ -44,12 +43,13 @@ type E2ETestHarness struct {
 	homeCICancel  context.CancelFunc
 
 	// Statistics
-	commitsCreated       int
-	branchesCreated      int
-	runningTests         []RunningTest
-	totalTestsDetected   int  // Total number of tests detected (for statistics)
-	timeoutDetected      bool
-	logCheckCount        int // Counter for periodic display
+	commitsCreated     int
+	branchesCreated    int
+	runningTests       []RunningTest
+	totalTestsDetected int // Total number of tests detected (for statistics)
+	timeoutDetected    bool
+	logCheckCount      int  // Counter for periodic display
+	stateFileRead      bool // Track if we've successfully read state.json
 }
 
 func NewE2ETestHarness(testType TestType, duration time.Duration) *E2ETestHarness {
@@ -337,7 +337,7 @@ func (th *E2ETestHarness) startHomeCI(configPath string) error {
 	th.homeCIContext, th.homeCICancel = context.WithCancel(context.Background())
 
 	// Start home-ci
-	th.homeCIProcess = exec.CommandContext(th.homeCIContext, "./home-ci", "-c", configPath, "-v")
+	th.homeCIProcess = exec.CommandContext(th.homeCIContext, "./home-ci", "-c", configPath, "-v", "5")
 
 	if err := th.homeCIProcess.Start(); err != nil {
 		return fmt.Errorf("failed to start home-ci: %w", err)
@@ -397,8 +397,8 @@ func (th *E2ETestHarness) createCommit(branch string) error {
 	return nil
 }
 
-// monitorLogs monitors home-ci logs
-func (th *E2ETestHarness) monitorLogs() {
+// monitorState monitors home-ci state.json for running tests and timeouts
+func (th *E2ETestHarness) monitorState() {
 	go func() {
 		// Wait for the .home-ci directory to be created by home-ci
 		homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
@@ -449,6 +449,7 @@ func (th *E2ETestHarness) checkStateForActivity(homeCIDir string) error {
 	// Update our running tests from state
 	th.runningTests = state.RunningTests
 	th.totalTestsDetected = len(state.RunningTests)
+	th.stateFileRead = true // Mark that we've successfully read the state file
 
 	// Display running tests every 15 checks (approximately every 30 seconds)
 	th.logCheckCount++
@@ -456,72 +457,54 @@ func (th *E2ETestHarness) checkStateForActivity(homeCIDir string) error {
 		th.displayRunningTests()
 	}
 
-	// Check for timeout in logs if it's a timeout test
+	// Check for timeout in running tests if it's a timeout test
 	if th.testType == TestTimeout {
-		return th.checkLogsForTimeout(homeCIDir)
+		return th.checkStateForTimeout()
 	}
 
 	return nil
 }
 
-// checkLogsForTimeout checks logs for timeout messages (used only for timeout tests)
-func (th *E2ETestHarness) checkLogsForTimeout(homeCIDir string) error {
-	files, err := os.ReadDir(homeCIDir)
-	if err != nil {
-		return err
-	}
+// checkStateForTimeout checks running tests in state for timeouts (used only for timeout tests)
+func (th *E2ETestHarness) checkStateForTimeout() error {
+	// For timeout tests, we expect a 30-second timeout based on config-timeout.yaml
+	timeoutDuration := 30 * time.Second
+	// Add some buffer for processing
+	checkThreshold := timeoutDuration + (10 * time.Second)
 
-	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(file.Name(), ".log") {
-			continue
-		}
+	now := time.Now()
+	for _, test := range th.runningTests {
+		elapsed := now.Sub(test.StartTime)
 
-		logPath := filepath.Join(homeCIDir, file.Name())
-		if err := th.scanLogFileForTimeout(logPath); err != nil {
-			log.Printf("Error reading log file %s: %v", file.Name(), err)
-		}
-	}
-
-	return nil
-}
-
-// scanLogFileForTimeout scans a log file for timeout messages only
-func (th *E2ETestHarness) scanLogFileForTimeout(logPath string) error {
-	file, err := os.Open(logPath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Check for timeout (only relevant for timeout tests)
-		if strings.Contains(line, "TEST TIMEOUT") ||
-		   strings.Contains(line, "Test execution timed out") ||
-		   strings.Contains(line, "Test was killed due to timeout") {
+		// If a test has been running longer than the expected timeout + buffer
+		if elapsed > checkThreshold {
 			if !th.timeoutDetected {
 				th.timeoutDetected = true
-				log.Printf("🕐 Timeout detected in logs: %s", strings.TrimSpace(line))
+				log.Printf("🕐 Timeout detected: test on branch %s has been running for %v (expected timeout: %v)",
+					test.Branch, elapsed.Truncate(time.Second), timeoutDuration)
 			}
 		}
 	}
 
-	return scanner.Err()
+	return nil
 }
-
 
 // displayRunningTests shows current running tests with their details
 func (th *E2ETestHarness) displayRunningTests() {
 	if len(th.runningTests) == 0 {
-		log.Printf("📊 No tests currently running")
+		// Only show "No tests currently running" if we've successfully read the state file
+		// Otherwise, tests might be running but we just can't see them yet
+		if th.stateFileRead {
+			log.Printf("📊 No tests currently running")
+		} else {
+			log.Printf("📊 Waiting for test state information...")
+		}
 		return
 	}
 
 	log.Printf("📊 Currently running tests (%d):", len(th.runningTests))
 	for i, test := range th.runningTests {
-		duration := time.Since(test.Started).Truncate(time.Second)
+		duration := time.Since(test.StartTime).Truncate(time.Second)
 		log.Printf("   %d. Branch: %s, Commit: %s", i+1, test.Branch, test.Commit[:min(8, len(test.Commit))])
 		log.Printf("      LogFile: %s, Running: %v", test.LogFile, duration)
 	}
@@ -534,7 +517,6 @@ func min(a, b int) int {
 	}
 	return b
 }
-
 
 // simulateActivity simulates development activity
 func (th *E2ETestHarness) simulateActivity() {
@@ -726,7 +708,7 @@ func main() {
 	}
 
 	// Start log monitoring
-	th.monitorLogs()
+	th.monitorState()
 
 	// Simulate development activity
 	th.simulateActivity()

@@ -137,7 +137,7 @@ func (m *Monitor) processBranchWithDateFilter(branchName string) error {
 
 	// Check if this is a new commit
 	state, exists := m.stateManager.GetBranchState(branchName)
-	if exists && state.LastCommit == commitHash {
+	if exists && state.LatestCommit == commitHash {
 		return nil // No new commits
 	}
 
@@ -146,10 +146,7 @@ func (m *Monitor) processBranchWithDateFilter(branchName string) error {
 	// Initialize or get branch state
 	if !exists {
 		state = &BranchState{
-			LastCommit:  "",
-			LastRunTime: time.Time{},
-			RunsToday:   0,
-			LastRunDate: "",
+			LatestCommit: "",
 		}
 		m.stateManager.SetBranchState(branchName, state)
 	}
