@@ -466,7 +466,6 @@ func (th *E2ETestHarness) checkStateForActivity(homeCIDir string) error {
 
 	// Update our running tests from state
 	th.runningTests = state.RunningTests
-	th.totalTestsDetected = len(state.RunningTests)
 	th.stateFileRead = true // Mark that we've successfully read the state file
 
 	// Display running tests every 15 checks (approximately every 30 seconds)
@@ -572,8 +571,28 @@ func (th *E2ETestHarness) simulateActivity() {
 	}
 }
 
+// countTestsFromLogs counts the number of tests by counting log files
+func (th *E2ETestHarness) countTestsFromLogs() int {
+	logDir := filepath.Join(th.testRepoPath, ".home-ci")
+	files, err := os.ReadDir(logDir)
+	if err != nil {
+		return 0
+	}
+
+	count := 0
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".log") {
+			count++
+		}
+	}
+	return count
+}
+
 // printStatistics displays test statistics
 func (th *E2ETestHarness) printStatistics() {
+	// Count tests from actual log files
+	th.totalTestsDetected = th.countTestsFromLogs()
+
 	log.Println("\n📊 Test Statistics:")
 	log.Printf("   Test Type: %s", th.getTestTypeName())
 	log.Printf("   Duration: %v", th.duration)
