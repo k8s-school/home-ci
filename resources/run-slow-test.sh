@@ -1,35 +1,44 @@
 #!/bin/bash
 set -e
 
-echo "=== Slow Test Suite (for timeout testing) ==="
-echo "Current directory: $(pwd)"
-echo "Current branch: $(git branch --show-current 2>/dev/null || echo 'detached')"
-echo "Current commit: $(git rev-parse HEAD)"
-echo "Timestamp: $(date)"
+# Create unique result file in /tmp/home-ci-data for cleanup validation
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null | head -c 8 || echo "unknown")
+BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
+DATA_DIR="/tmp/home-ci-data"
+RESULT_FILE="$DATA_DIR/timeout-test-${TIMESTAMP}-${BRANCH_NAME}-${COMMIT_HASH}.json"
 
-# Check passed arguments
-if [ $# -gt 0 ]; then
-    echo "Arguments received: $*"
-fi
+# Ensure data directory exists
+mkdir -p "$DATA_DIR"
 
-echo ""
-echo "=== Starting long-running test ==="
-echo "This test will run for 2 minutes to test timeout behavior..."
+echo "=== Slow Test (timeout validation) ==="
+echo "Branch: $BRANCH_NAME | Commit: $COMMIT_HASH"
+
+# Save run information to result file
+cat > "$RESULT_FILE" << EOF
+{
+  "working_dir": "$(pwd)",
+  "test_type": "timeout_validation"
+}
+EOF
+
+echo "📁 Test result: $RESULT_FILE"
+echo "⏳ Running for 2 minutes (should timeout after 30s)..."
 
 # Long-running operation that should trigger timeout if timeout < 2 minutes
 for i in {1..120}; do
-    echo "Test step $i/120 - $(date)"
+    if [ $((i % 15)) -eq 0 ]; then
+        echo "Step $i/120..."
+    fi
     sleep 1
 
-    # Allow early termination if the script receives SIGTERM
+    # Allow early termination
     if [ -f "/tmp/stop_slow_test" ]; then
-        echo "Early termination requested"
+        echo "Early termination"
         rm -f "/tmp/stop_slow_test"
         exit 0
     fi
 done
 
-echo ""
-echo "✅ Long test completed successfully!"
-echo "This should only appear if timeout is > 2 minutes"
+echo "✅ Test completed (should not appear with 30s timeout)"
 exit 0

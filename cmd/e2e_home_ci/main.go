@@ -41,6 +41,7 @@ type E2ETestHarness struct {
 	homeCIProcess *exec.Cmd
 	homeCIContext context.Context
 	homeCICancel  context.CancelFunc
+	noCleanup     bool // Skip cleanup for debugging
 
 	// Statistics
 	commitsCreated     int
@@ -52,7 +53,7 @@ type E2ETestHarness struct {
 	stateFileRead      bool // Track if we've successfully read state.json
 }
 
-func NewE2ETestHarness(testType TestType, duration time.Duration) *E2ETestHarness {
+func NewE2ETestHarness(testType TestType, duration time.Duration, noCleanup bool) *E2ETestHarness {
 	repoPath := "/tmp/test-repo-home-ci"
 	if testType == TestTimeout {
 		repoPath = "/tmp/test-repo-timeout"
@@ -62,6 +63,7 @@ func NewE2ETestHarness(testType TestType, duration time.Duration) *E2ETestHarnes
 		testType:     testType,
 		duration:     duration,
 		testRepoPath: repoPath,
+		noCleanup:    noCleanup,
 	}
 }
 
@@ -79,11 +81,15 @@ func (th *E2ETestHarness) writeFileFromResource(content, filePath string, execut
 
 // setupTestRepo creates a test repository using the embedded setup script or manual setup
 func (th *E2ETestHarness) setupTestRepo() error {
-	log.Printf("🚀 Setting up test repository (%s)...", th.testRepoPath)
+	if th.testType != TestTimeout {
+		log.Printf("🚀 Setting up test repository (%s)...", th.testRepoPath)
+	}
 
 	// Clean up existing repository
 	if _, err := os.Stat(th.testRepoPath); err == nil {
-		log.Printf("Removing existing test repository at %s", th.testRepoPath)
+		if th.testType != TestTimeout {
+			log.Printf("Removing existing test repository at %s", th.testRepoPath)
+		}
 		if err := os.RemoveAll(th.testRepoPath); err != nil {
 			return fmt.Errorf("failed to remove existing repo: %w", err)
 		}
@@ -265,15 +271,17 @@ func (th *E2ETestHarness) initializeGitRepo() error {
 		}
 	}
 
-	// Display final state (like setup-test-repo.sh)
-	log.Println("Available branches:")
-	if output, err := th.runGitCommandWithOutput("git", "branch", "-a"); err == nil {
-		log.Println(output)
-	}
+	// Display final state (like setup-test-repo.sh) - skip for timeout tests to reduce verbosity
+	if th.testType != TestTimeout {
+		log.Println("Available branches:")
+		if output, err := th.runGitCommandWithOutput("git", "branch", "-a"); err == nil {
+			log.Println(output)
+		}
 
-	log.Println("Recent commits on main:")
-	if output, err := th.runGitCommandWithOutput("git", "log", "--oneline", "-5"); err == nil {
-		log.Println(output)
+		log.Println("Recent commits on main:")
+		if output, err := th.runGitCommandWithOutput("git", "log", "--oneline", "-5"); err == nil {
+			log.Println(output)
+		}
 	}
 
 	return nil
@@ -325,26 +333,36 @@ func (th *E2ETestHarness) createConfigFile() (string, error) {
 		return "", fmt.Errorf("failed to create config file: %w", err)
 	}
 
-	log.Printf("✅ Configuration file created at %s", configPath)
+	if th.testType != TestTimeout {
+		log.Printf("✅ Configuration file created at %s", configPath)
+	}
 	return configPath, nil
 }
 
 // startHomeCI starts home-ci with the appropriate configuration
 func (th *E2ETestHarness) startHomeCI(configPath string) error {
-	log.Println("🚀 Starting home-ci process...")
+	if th.testType != TestTimeout {
+		log.Println("🚀 Starting home-ci process...")
+	}
 
 	// Create a context with cancellation
 	th.homeCIContext, th.homeCICancel = context.WithCancel(context.Background())
 
-	// Start home-ci
-	th.homeCIProcess = exec.CommandContext(th.homeCIContext, "./home-ci", "-c", configPath, "-v", "5")
+	// Start home-ci with less verbose logging for timeout tests
+	verbosity := "5"
+	if th.testType == TestTimeout {
+		verbosity = "1" // Reduce verbosity for timeout tests
+	}
+	th.homeCIProcess = exec.CommandContext(th.homeCIContext, "./home-ci", "-c", configPath, "-v", verbosity)
 
 	if err := th.homeCIProcess.Start(); err != nil {
 		return fmt.Errorf("failed to start home-ci: %w", err)
 	}
 
-	logPath := filepath.Join(th.testRepoPath, ".home-ci")
-	log.Printf("✅ home-ci started with PID %d, logs will be in %s/", th.homeCIProcess.Process.Pid, logPath)
+	if th.testType != TestTimeout {
+		logPath := filepath.Join(th.testRepoPath, ".home-ci")
+		log.Printf("✅ home-ci started with PID %d, logs will be in %s/", th.homeCIProcess.Process.Pid, logPath)
+	}
 
 	// Wait a bit for home-ci to start
 	time.Sleep(3 * time.Second)
@@ -593,9 +611,57 @@ func (th *E2ETestHarness) getTestTypeName() string {
 	}
 }
 
+// saveTestData saves test data to persistent storage
+func (th *E2ETestHarness) saveTestData() error {
+	if th.testType != TestTimeout {
+		return nil // Only save data for timeout tests
+	}
+
+	dataDir := "/tmp/home-ci-data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Create unique filename with timestamp
+	timestamp := time.Now().Format("20060102-150405")
+	filename := fmt.Sprintf("timeout-test-%s.json", timestamp)
+	dataPath := filepath.Join(dataDir, filename)
+
+	// Collect test data
+	testData := map[string]interface{}{
+		"timestamp":        time.Now().Format(time.RFC3339),
+		"test_type":        th.getTestTypeName(),
+		"duration":         th.duration.String(),
+		"commits_created":  th.commitsCreated,
+		"branches_created": th.branchesCreated,
+		"tests_detected":   th.totalTestsDetected,
+		"timeout_detected": th.timeoutDetected,
+		"test_repo_path":   th.testRepoPath,
+		"running_tests":    th.runningTests,
+	}
+
+	// Save to JSON file
+	data, err := json.MarshalIndent(testData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal test data: %w", err)
+	}
+
+	if err := os.WriteFile(dataPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write test data: %w", err)
+	}
+
+	log.Printf("💾 Test data saved to %s", dataPath)
+	return nil
+}
+
 // cleanup cleans up resources
 func (th *E2ETestHarness) cleanup() {
 	log.Println("🧹 Cleaning up...")
+
+	// Save test data before cleanup (for timeout tests)
+	if err := th.saveTestData(); err != nil {
+		log.Printf("⚠️ Failed to save test data: %v", err)
+	}
 
 	// Stop home-ci
 	if th.homeCICancel != nil {
@@ -603,15 +669,25 @@ func (th *E2ETestHarness) cleanup() {
 	}
 
 	if th.homeCIProcess != nil && th.homeCIProcess.Process != nil {
-		log.Printf("Stopping home-ci process (PID: %d)", th.homeCIProcess.Process.Pid)
+		if th.testType != TestTimeout {
+			log.Printf("Stopping home-ci process (PID: %d)", th.homeCIProcess.Process.Pid)
+		}
 		if err := th.homeCIProcess.Process.Signal(syscall.SIGTERM); err != nil {
-			log.Printf("Failed to send SIGTERM: %v", err)
+			if th.testType != TestTimeout {
+				log.Printf("Failed to send SIGTERM: %v", err)
+			}
 			th.homeCIProcess.Process.Kill()
 		}
 		th.homeCIProcess.Wait()
 	}
 
-	log.Println("✅ Cleanup completed")
+	// Skip repository cleanup if no-cleanup flag is set
+	if th.noCleanup {
+		log.Printf("🔍 Keeping test repository for debugging: %s", th.testRepoPath)
+		log.Println("✅ Cleanup completed (repository preserved)")
+	} else {
+		log.Println("✅ Cleanup completed")
+	}
 }
 
 // parseTestType parses test type from string
@@ -632,7 +708,8 @@ func main() {
 	var (
 		testTypeFlag = flag.String("type", "normal", "Test type: normal, timeout, quick, long")
 		durationFlag = flag.String("duration", "3m", "Test duration (e.g., 30s, 5m, 1h)")
-		helpFlag     = flag.Bool("help", false, "Show help")
+		noCleanupFlag = flag.Bool("no-cleanup", false, "Keep test repositories for debugging")
+		helpFlag      = flag.Bool("help", false, "Show help")
 	)
 	flag.Parse()
 
@@ -655,6 +732,7 @@ func main() {
 		fmt.Println("  e2e_home_ci -type=normal -duration=5m")
 		fmt.Println("  e2e_home_ci -type=timeout")
 		fmt.Println("  e2e_home_ci -type=quick")
+		fmt.Println("  e2e_home_ci -type=timeout -no-cleanup  # Keep repos for debugging")
 		return
 	}
 
@@ -680,7 +758,7 @@ func main() {
 		map[TestType]string{TestNormal: "normal", TestTimeout: "timeout", TestQuick: "quick", TestLong: "long"}[testType],
 		duration)
 
-	th := NewE2ETestHarness(testType, duration)
+	th := NewE2ETestHarness(testType, duration, *noCleanupFlag)
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)

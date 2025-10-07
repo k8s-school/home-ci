@@ -61,6 +61,7 @@ clean:
 	rm -rf /tmp/test-repo-timeout
 	rm -f /tmp/home-ci-test-config-*.yaml
 	@echo "✅ Clean complete"
+	@echo "💾 Test data preserved in /tmp/home-ci-data/"
 
 # Development helpers
 dev-deps:
