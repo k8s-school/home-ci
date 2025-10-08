@@ -238,7 +238,7 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	fmt.Fprintf(logFile, "Reset to commit %s successfully\n", commit)
 	fmt.Fprintf(logFile, "========================\n\n")
 
-	// Parse options and add branch parameter
+	// Parse options as command line arguments
 	args := []string{}
 	if tr.config.Options != "" {
 		optionArgs := strings.Fields(tr.config.Options)

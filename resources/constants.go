@@ -8,9 +8,6 @@ import (
 //go:embed run-e2e.sh
 var RunE2EScript string
 
-//go:embed run-slow-test.sh
-var RunSlowTestScript string
-
 //go:embed setup-test-repo.sh
 var SetupTestRepoScript string
 
@@ -23,3 +20,6 @@ var ConfigNormal string
 
 //go:embed config-timeout.yaml
 var ConfigTimeout string
+
+//go:embed test-expectations.yaml
+var TestExpectations string

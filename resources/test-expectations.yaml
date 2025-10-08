@@ -1,0 +1,60 @@
+# Expected test results configuration for e2e testing
+# This file defines what outcome each test scenario should produce
+
+# Global test scenarios that apply to all branches
+global_scenarios:
+  # Scenario based on commit message patterns
+  commit_patterns:
+    - pattern: ".*FAIL.*"
+      expected_result: "failure"
+      description: "Commits with FAIL in message should fail"
+
+    - pattern: ".*TIMEOUT.*"
+      expected_result: "timeout"
+      description: "Commits with TIMEOUT in message should timeout"
+
+    - pattern: ".*SUCCESS.*"
+      expected_result: "success"
+      description: "Commits with SUCCESS in message should succeed"
+
+# Branch-specific test scenarios
+branch_scenarios:
+  main:
+    default_result: "success"
+    description: "Main branch should generally succeed"
+    special_cases:
+      - commit_hash_prefix: "abc123"
+        expected_result: "failure"
+        description: "Specific commit that should fail"
+
+  feature/test1:
+    default_result: "success"
+    description: "Feature test1 should succeed"
+
+  feature/test2:
+    default_result: "failure"
+    description: "Feature test2 should fail to test error handling"
+
+  bugfix/critical:
+    default_result: "timeout"
+    description: "Critical bugfix should timeout to test timeout handling"
+
+  # Wildcard patterns for dynamic branches
+  "feature/*":
+    default_result: "success"
+    description: "Most feature branches should succeed"
+
+  "bugfix/*":
+    default_result: "failure"
+    description: "Most bugfix branches should fail (to test error scenarios)"
+
+# Test execution parameters (currently unused - durations are hardcoded in run-e2e.sh)
+# These could be used in future versions for dynamic timing control
+
+# Data file creation settings
+data_files:
+  enabled: true
+  base_directory: "/tmp/home-ci-data"
+  success_prefix: "SUCCESS"
+  failure_prefix: "FAILURE"
+  timeout_prefix: "TIMEOUT"

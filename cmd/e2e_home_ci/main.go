@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/k8s-school/home-ci/resources"
+	"gopkg.in/yaml.v3"
 )
 
 type TestType int
@@ -106,17 +107,9 @@ func (th *E2ETestHarness) setupTestRepo() error {
 		return fmt.Errorf("failed to create _e2e directory: %w", err)
 	}
 
-	// Write the appropriate test script based on test type
-	var testScript string
-	var scriptName string
-
-	if th.testType == TestTimeout {
-		testScript = resources.RunSlowTestScript
-		scriptName = "run-slow-test.sh"
-	} else {
-		testScript = resources.RunE2EScript
-		scriptName = "run-e2e.sh"
-	}
+	// Write the test script (run-e2e.sh handles all scenarios including timeout)
+	testScript := resources.RunE2EScript
+	scriptName := "run-e2e.sh"
 
 	scriptPath := filepath.Join(e2eDir, scriptName)
 	if err := th.writeFileFromResource(testScript, scriptPath, true); err != nil {
@@ -543,6 +536,172 @@ func (th *E2ETestHarness) checkJSONForTimeout(jsonPath string) bool {
 	return result.TimedOut
 }
 
+// TestExpectationConfig represents the test expectations configuration
+type TestExpectationConfig struct {
+	GlobalScenarios struct {
+		CommitPatterns []struct {
+			Pattern        string `yaml:"pattern"`
+			ExpectedResult string `yaml:"expected_result"`
+			Description    string `yaml:"description"`
+		} `yaml:"commit_patterns"`
+	} `yaml:"global_scenarios"`
+
+	BranchScenarios map[string]struct {
+		DefaultResult string `yaml:"default_result"`
+		Description   string `yaml:"description"`
+		SpecialCases  []struct {
+			CommitHashPrefix string `yaml:"commit_hash_prefix"`
+			ExpectedResult   string `yaml:"expected_result"`
+			Description      string `yaml:"description"`
+		} `yaml:"special_cases"`
+	} `yaml:"branch_scenarios"`
+
+	// ExecutionParams removed - not currently used
+
+	DataFiles struct {
+		Enabled         bool   `yaml:"enabled"`
+		BaseDirectory   string `yaml:"base_directory"`
+		SuccessPrefix   string `yaml:"success_prefix"`
+		FailurePrefix   string `yaml:"failure_prefix"`
+		TimeoutPrefix   string `yaml:"timeout_prefix"`
+	} `yaml:"data_files"`
+}
+
+// ValidationResult represents the result of validating test expectations
+type ValidationResult struct {
+	TotalTests         int `json:"total_tests"`
+	ExpectedSuccesses  int `json:"expected_successes"`
+	ExpectedFailures   int `json:"expected_failures"`
+	ExpectedTimeouts   int `json:"expected_timeouts"`
+	ActualSuccesses    int `json:"actual_successes"`
+	ActualFailures     int `json:"actual_failures"`
+	ActualTimeouts     int `json:"actual_timeouts"`
+	CorrectPredictions int `json:"correct_predictions"`
+	ValidationScore    float64 `json:"validation_score"`
+}
+
+// loadTestExpectations loads the test expectations configuration
+func (th *E2ETestHarness) loadTestExpectations() (*TestExpectationConfig, error) {
+	var config TestExpectationConfig
+
+	if err := yaml.Unmarshal([]byte(resources.TestExpectations), &config); err != nil {
+		return nil, fmt.Errorf("failed to parse test expectations: %w", err)
+	}
+
+	return &config, nil
+}
+
+// getExpectedResult determines what result is expected for a given branch and commit
+func (th *E2ETestHarness) getExpectedResult(config *TestExpectationConfig, branch, commit, commitMessage string) string {
+	// Check global commit patterns first (highest priority)
+	for _, pattern := range config.GlobalScenarios.CommitPatterns {
+		if matched, _ := filepath.Match(pattern.Pattern, commitMessage); matched {
+			return pattern.ExpectedResult
+		}
+	}
+
+	// Check branch-specific scenarios
+	if branchConfig, exists := config.BranchScenarios[branch]; exists {
+		// Check special cases for this branch
+		for _, specialCase := range branchConfig.SpecialCases {
+			if strings.HasPrefix(commit, specialCase.CommitHashPrefix) {
+				return specialCase.ExpectedResult
+			}
+		}
+		return branchConfig.DefaultResult
+	}
+
+	// Check wildcard patterns
+	for branchPattern, branchConfig := range config.BranchScenarios {
+		if strings.Contains(branchPattern, "*") {
+			if matched, _ := filepath.Match(branchPattern, branch); matched {
+				return branchConfig.DefaultResult
+			}
+		}
+	}
+
+	// Default to success if no pattern matches
+	return "success"
+}
+
+// validateTestResults validates actual test results against expectations
+func (th *E2ETestHarness) validateTestResults() ValidationResult {
+	result := ValidationResult{}
+
+	config, err := th.loadTestExpectations()
+	if err != nil {
+		log.Printf("⚠️ Failed to load test expectations: %v", err)
+		return result
+	}
+
+	// Get all test result files
+	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+	files, err := os.ReadDir(homeCIDir)
+	if err != nil {
+		log.Printf("⚠️ Failed to read test results directory: %v", err)
+		return result
+	}
+
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
+			jsonPath := filepath.Join(homeCIDir, file.Name())
+
+			content, err := os.ReadFile(jsonPath)
+			if err != nil {
+				continue
+			}
+
+			var testResult TestResult
+			if err := json.Unmarshal(content, &testResult); err != nil {
+				continue
+			}
+
+			result.TotalTests++
+
+			// Determine expected outcome
+			expectedResult := th.getExpectedResult(config, testResult.Branch, testResult.Commit, "")
+
+			// Count expected outcomes
+			switch expectedResult {
+			case "success":
+				result.ExpectedSuccesses++
+			case "failure":
+				result.ExpectedFailures++
+			case "timeout":
+				result.ExpectedTimeouts++
+			}
+
+			// Count actual outcomes
+			if testResult.Success {
+				result.ActualSuccesses++
+			} else if testResult.TimedOut {
+				result.ActualTimeouts++
+			} else {
+				result.ActualFailures++
+			}
+
+			// Check if prediction was correct
+			actualResult := "failure" // default
+			if testResult.Success {
+				actualResult = "success"
+			} else if testResult.TimedOut {
+				actualResult = "timeout"
+			}
+
+			if expectedResult == actualResult {
+				result.CorrectPredictions++
+			}
+		}
+	}
+
+	// Calculate validation score
+	if result.TotalTests > 0 {
+		result.ValidationScore = float64(result.CorrectPredictions) / float64(result.TotalTests) * 100.0
+	}
+
+	return result
+}
+
 // displayRunningTests shows current running tests with their details
 func (th *E2ETestHarness) displayRunningTests() {
 	if len(th.runningTests) == 0 {
@@ -652,6 +811,25 @@ func (th *E2ETestHarness) printStatistics() {
 			log.Println("⚠️  WARNING: No test executions detected despite commits being created!")
 		} else if th.totalTestsDetected > 0 {
 			log.Println("✅ Test execution detection working correctly!")
+
+			// Validate test results against expectations
+			validation := th.validateTestResults()
+			if validation.TotalTests > 0 {
+				log.Println("\n🎯 Test Expectations Validation:")
+				log.Printf("   Total tests validated: %d", validation.TotalTests)
+				log.Printf("   Expected: Success=%d, Failure=%d, Timeout=%d",
+					validation.ExpectedSuccesses, validation.ExpectedFailures, validation.ExpectedTimeouts)
+				log.Printf("   Actual: Success=%d, Failure=%d, Timeout=%d",
+					validation.ActualSuccesses, validation.ActualFailures, validation.ActualTimeouts)
+				log.Printf("   Correct predictions: %d/%d (%.1f%%)",
+					validation.CorrectPredictions, validation.TotalTests, validation.ValidationScore)
+
+				if validation.ValidationScore >= 75.0 {
+					log.Println("✅ Test expectations validation passed!")
+				} else {
+					log.Println("⚠️  Test expectations validation needs improvement")
+				}
+			}
 		}
 	}
 }
