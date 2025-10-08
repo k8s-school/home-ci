@@ -482,28 +482,65 @@ func (th *E2ETestHarness) checkStateForActivity(homeCIDir string) error {
 	return nil
 }
 
-// checkStateForTimeout checks running tests in state for timeouts (used only for timeout tests)
+// checkStateForTimeout checks for timeout by examining JSON result files (used only for timeout tests)
 func (th *E2ETestHarness) checkStateForTimeout() error {
-	// For timeout tests, we expect a 30-second timeout based on config-timeout.yaml
-	timeoutDuration := 30 * time.Second
-	// Add some buffer for processing
-	checkThreshold := timeoutDuration + (10 * time.Second)
+	if th.timeoutDetected {
+		return nil // Already detected
+	}
 
-	now := time.Now()
-	for _, test := range th.runningTests {
-		elapsed := now.Sub(test.StartTime)
+	// Check JSON result files for timeout indication
+	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+	files, err := os.ReadDir(homeCIDir)
+	if err != nil {
+		return nil // No files yet
+	}
 
-		// If a test has been running longer than the expected timeout + buffer
-		if elapsed > checkThreshold {
-			if !th.timeoutDetected {
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+			jsonPath := filepath.Join(homeCIDir, file.Name())
+			if th.checkJSONForTimeout(jsonPath) {
 				th.timeoutDetected = true
-				log.Printf("🕐 Timeout detected: test on branch %s has been running for %v (expected timeout: %v)",
-					test.Branch, elapsed.Truncate(time.Second), timeoutDuration)
+				log.Printf("🕐 Timeout detected: found timeout in result file %s", file.Name())
+				return nil
 			}
 		}
 	}
 
 	return nil
+}
+
+// TestResult represents the test result structure (copy from runner package to avoid import)
+type TestResult struct {
+	Branch                    string        `json:"branch"`
+	Commit                    string        `json:"commit"`
+	LogFile                   string        `json:"log_file"`
+	StartTime                 time.Time     `json:"start_time"`
+	EndTime                   time.Time     `json:"end_time"`
+	Duration                  time.Duration `json:"duration"`
+	Success                   bool          `json:"success"`
+	TimedOut                  bool          `json:"timed_out"`
+	CleanupExecuted           bool          `json:"cleanup_executed"`
+	CleanupSuccess            bool          `json:"cleanup_success"`
+	GitHubActionsNotified     bool          `json:"github_actions_notified"`
+	GitHubActionsSuccess      bool          `json:"github_actions_success"`
+	ErrorMessage              string        `json:"error_message,omitempty"`
+	CleanupErrorMessage       string        `json:"cleanup_error_message,omitempty"`
+	GitHubActionsErrorMessage string        `json:"github_actions_error_message,omitempty"`
+}
+
+// checkJSONForTimeout checks if a JSON result file indicates a timeout
+func (th *E2ETestHarness) checkJSONForTimeout(jsonPath string) bool {
+	content, err := os.ReadFile(jsonPath)
+	if err != nil {
+		return false
+	}
+
+	var result TestResult
+	if err := json.Unmarshal(content, &result); err != nil {
+		return false
+	}
+
+	return result.TimedOut
 }
 
 // displayRunningTests shows current running tests with their details
@@ -571,18 +608,21 @@ func (th *E2ETestHarness) simulateActivity() {
 	}
 }
 
-// countTestsFromLogs counts the number of tests by counting log files
-func (th *E2ETestHarness) countTestsFromLogs() int {
-	logDir := filepath.Join(th.testRepoPath, ".home-ci")
-	files, err := os.ReadDir(logDir)
+// countTestsFromResults counts the number of tests by counting JSON result files
+func (th *E2ETestHarness) countTestsFromResults() int {
+	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+	files, err := os.ReadDir(homeCIDir)
 	if err != nil {
 		return 0
 	}
 
 	count := 0
 	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".log") {
-			count++
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+			// Skip state.json file, only count test result files
+			if file.Name() != "state.json" {
+				count++
+			}
 		}
 	}
 	return count
@@ -590,8 +630,8 @@ func (th *E2ETestHarness) countTestsFromLogs() int {
 
 // printStatistics displays test statistics
 func (th *E2ETestHarness) printStatistics() {
-	// Count tests from actual log files
-	th.totalTestsDetected = th.countTestsFromLogs()
+	// Count tests from actual JSON result files
+	th.totalTestsDetected = th.countTestsFromResults()
 
 	log.Println("\n📊 Test Statistics:")
 	log.Printf("   Test Type: %s", th.getTestTypeName())
@@ -673,9 +713,9 @@ func (th *E2ETestHarness) saveTestData() error {
 	return nil
 }
 
-// cleanup cleans up resources
-func (th *E2ETestHarness) cleanup() {
-	log.Println("🧹 Cleaning up...")
+// cleanupE2EResources cleans up e2e test harness resources (separate from general cleanup script)
+func (th *E2ETestHarness) cleanupE2EResources() {
+	log.Println("🧹 Cleaning up e2e test harness resources...")
 
 	// Save test data before cleanup (for timeout tests)
 	if err := th.saveTestData(); err != nil {
@@ -700,12 +740,12 @@ func (th *E2ETestHarness) cleanup() {
 		th.homeCIProcess.Wait()
 	}
 
-	// Skip repository cleanup if no-cleanup flag is set
+	// Skip e2e repository cleanup if no-cleanup flag is set
 	if th.noCleanup {
-		log.Printf("🔍 Keeping test repository for debugging: %s", th.testRepoPath)
-		log.Println("✅ Cleanup completed (repository preserved)")
+		log.Printf("🔍 Keeping e2e test repository for debugging: %s", th.testRepoPath)
+		log.Println("✅ E2E test harness cleanup completed (repository preserved)")
 	} else {
-		log.Println("✅ Cleanup completed")
+		log.Println("✅ E2E test harness cleanup completed")
 	}
 }
 
@@ -786,7 +826,7 @@ func main() {
 	go func() {
 		<-sigChan
 		log.Println("\n⚠️  Received interrupt signal, shutting down...")
-		th.cleanup()
+		th.cleanupE2EResources()
 		os.Exit(0)
 	}()
 
@@ -822,8 +862,8 @@ func main() {
 	// Display statistics
 	th.printStatistics()
 
-	// Clean up
-	th.cleanup()
+	// Clean up e2e test harness resources
+	th.cleanupE2EResources()
 
 	// Determine success
 	success := true
