@@ -1,6 +1,6 @@
 repo_path: "/tmp/test-repo-home-ci"
 check_interval: 30s
-test_script: "resources/e2e/src/run-e2e.sh"
+test_script: "_e2e/run-e2e.sh"
 options: "-c -i ztf"
 max_commit_age: 240h
 test_timeout: 10m
@@ -8,8 +8,8 @@ fetch_remote: false
 max_concurrent_runs: 1
 
 cleanup:
-  after_e2e: true
-  script: "resources/e2e/src/cleanup.sh"
+  after_e2e: false
+  script: ""
 
 github_actions_dispatch:
   enabled: false

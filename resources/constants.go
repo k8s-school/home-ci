@@ -5,21 +5,21 @@ import (
 )
 
 // Test scripts embedded as string resources
-//go:embed run-e2e.sh
+//go:embed e2e/src/run-e2e.sh
 var RunE2EScript string
 
-//go:embed setup-test-repo.sh
+//go:embed e2e/setup-test-repo.sh
 var SetupTestRepoScript string
 
-//go:embed cleanup_e2e.sh
+//go:embed e2e/cleanup_e2e.sh
 var CleanupE2EScript string
 
 // Configuration files embedded as string resources
-//go:embed config-normal.yaml
+//go:embed e2e/configs/config-normal.yaml
 var ConfigNormal string
 
-//go:embed config-timeout.yaml
+//go:embed e2e/configs/config-timeout.yaml
 var ConfigTimeout string
 
-//go:embed test-expectations.yaml
+//go:embed e2e/test-expectations.yaml
 var TestExpectations string

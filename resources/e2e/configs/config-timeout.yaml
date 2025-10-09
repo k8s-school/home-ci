@@ -8,8 +8,8 @@ fetch_remote: false
 max_concurrent_runs: 1
 
 cleanup:
-  after_e2e: true
-  script: "resources/e2e/src/cleanup.sh"
+  after_e2e: false
+  script: ""
 
 github_actions_dispatch:
   enabled: false
