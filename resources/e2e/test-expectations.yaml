@@ -50,11 +50,3 @@ branch_scenarios:
 
 # Test execution parameters (currently unused - durations are hardcoded in run-e2e.sh)
 # These could be used in future versions for dynamic timing control
-
-# Data file creation settings
-data_files:
-  enabled: true
-  base_directory: "/tmp/home-ci-data"
-  success_prefix: "SUCCESS"
-  failure_prefix: "FAILURE"
-  timeout_prefix: "TIMEOUT"

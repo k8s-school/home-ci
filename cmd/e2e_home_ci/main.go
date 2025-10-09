@@ -557,14 +557,6 @@ type TestExpectationConfig struct {
 	} `yaml:"branch_scenarios"`
 
 	// ExecutionParams removed - not currently used
-
-	DataFiles struct {
-		Enabled         bool   `yaml:"enabled"`
-		BaseDirectory   string `yaml:"base_directory"`
-		SuccessPrefix   string `yaml:"success_prefix"`
-		FailurePrefix   string `yaml:"failure_prefix"`
-		TimeoutPrefix   string `yaml:"timeout_prefix"`
-	} `yaml:"data_files"`
 }
 
 // ValidationResult represents the result of validating test expectations
