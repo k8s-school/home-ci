@@ -39,6 +39,7 @@ type E2ETestHarness struct {
 	testType      TestType
 	duration      time.Duration
 	testRepoPath  string
+	tempRunDir    string // Unique temp directory for this run (contains repo and data)
 	homeCIProcess *exec.Cmd
 	homeCIContext context.Context
 	homeCICancel  context.CancelFunc
@@ -55,15 +56,22 @@ type E2ETestHarness struct {
 }
 
 func NewE2ETestHarness(testType TestType, duration time.Duration, noCleanup bool) *E2ETestHarness {
-	repoPath := "/tmp/test-repo-home-ci"
+	// Create unique temporary directory for this run
+	timestamp := time.Now().Format("20060102-150405")
+	tempRunDir := fmt.Sprintf("/tmp/home-ci-%s", timestamp)
+
+	// Repository path within the temp run directory
+	repoName := "test-repo"
 	if testType == TestTimeout {
-		repoPath = "/tmp/test-repo-timeout"
+		repoName = "test-repo-timeout"
 	}
+	repoPath := filepath.Join(tempRunDir, repoName)
 
 	return &E2ETestHarness{
 		testType:     testType,
 		duration:     duration,
 		testRepoPath: repoPath,
+		tempRunDir:   tempRunDir,
 		noCleanup:    noCleanup,
 	}
 }
@@ -83,28 +91,39 @@ func (th *E2ETestHarness) writeFileFromResource(content, filePath string, execut
 // setupTestRepo creates a test repository using the embedded setup script or manual setup
 func (th *E2ETestHarness) setupTestRepo() error {
 	if th.testType != TestTimeout {
-		log.Printf("🚀 Setting up test repository (%s)...", th.testRepoPath)
+		log.Printf("🚀 Setting up test environment (%s)...", th.tempRunDir)
 	}
 
-	// Clean up existing repository
-	if _, err := os.Stat(th.testRepoPath); err == nil {
+	// Clean up existing temp run directory
+	if _, err := os.Stat(th.tempRunDir); err == nil {
 		if th.testType != TestTimeout {
-			log.Printf("Removing existing test repository at %s", th.testRepoPath)
+			log.Printf("Removing existing temp run directory at %s", th.tempRunDir)
 		}
-		if err := os.RemoveAll(th.testRepoPath); err != nil {
-			return fmt.Errorf("failed to remove existing repo: %w", err)
+		if err := os.RemoveAll(th.tempRunDir); err != nil {
+			return fmt.Errorf("failed to remove existing temp dir: %w", err)
 		}
 	}
 
-	// Create the new repository
+	// Create the temp run directory structure
+	if err := os.MkdirAll(th.tempRunDir, 0755); err != nil {
+		return fmt.Errorf("failed to create temp run directory: %w", err)
+	}
+
+	// Create data subdirectory for test data files
+	dataDir := filepath.Join(th.tempRunDir, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Create the repository directory
 	if err := os.MkdirAll(th.testRepoPath, 0755); err != nil {
 		return fmt.Errorf("failed to create repo directory: %w", err)
 	}
 
-	// Create the _e2e directory
-	e2eDir := filepath.Join(th.testRepoPath, "_e2e")
+	// Create the e2e directory
+	e2eDir := filepath.Join(th.testRepoPath, "e2e")
 	if err := os.MkdirAll(e2eDir, 0755); err != nil {
-		return fmt.Errorf("failed to create _e2e directory: %w", err)
+		return fmt.Errorf("failed to create e2e directory: %w", err)
 	}
 
 	// Write the test script (run-e2e.sh handles all scenarios including timeout)
@@ -114,6 +133,15 @@ func (th *E2ETestHarness) setupTestRepo() error {
 	scriptPath := filepath.Join(e2eDir, scriptName)
 	if err := th.writeFileFromResource(testScript, scriptPath, true); err != nil {
 		return fmt.Errorf("failed to write test script: %w", err)
+	}
+
+	// Write the cleanup script (cleanup.sh for cleanup after test execution)
+	cleanupScript := resources.CleanupE2EScript
+	cleanupScriptName := "cleanup.sh"
+
+	cleanupScriptPath := filepath.Join(e2eDir, cleanupScriptName)
+	if err := th.writeFileFromResource(cleanupScript, cleanupScriptPath, true); err != nil {
+		return fmt.Errorf("failed to write cleanup script: %w", err)
 	}
 
 	// Initialize git using the embedded setup script logic
@@ -347,6 +375,10 @@ func (th *E2ETestHarness) startHomeCI(configPath string) error {
 		verbosity = "1" // Reduce verbosity for timeout tests
 	}
 	th.homeCIProcess = exec.CommandContext(th.homeCIContext, "./home-ci", "-c", configPath, "-v", verbosity)
+
+	// Set environment variable for data directory
+	dataDir := filepath.Join(th.tempRunDir, "data")
+	th.homeCIProcess.Env = append(os.Environ(), fmt.Sprintf("HOME_CI_DATA_DIR=%s", dataDir))
 
 	if err := th.homeCIProcess.Start(); err != nil {
 		return fmt.Errorf("failed to start home-ci: %w", err)
@@ -723,6 +755,52 @@ func min(a, b int) int {
 	return b
 }
 
+// verifyCleanupExecuted checks if cleanup was executed for timeout tests
+func (th *E2ETestHarness) verifyCleanupExecuted() bool {
+	if th.testType != TestTimeout {
+		return true // Not relevant for non-timeout tests
+	}
+
+	// Check if any test result JSON files indicate cleanup was executed
+	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+	files, err := os.ReadDir(homeCIDir)
+	if err != nil {
+		log.Printf("⚠️ Could not read test results directory: %v", err)
+		return false
+	}
+
+	cleanupExecuted := false
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
+			jsonPath := filepath.Join(homeCIDir, file.Name())
+
+			content, err := os.ReadFile(jsonPath)
+			if err != nil {
+				continue
+			}
+
+			var result TestResult
+			if err := json.Unmarshal(content, &result); err != nil {
+				continue
+			}
+
+			if result.TimedOut && result.CleanupExecuted {
+				log.Printf("✅ Cleanup executed for timeout test: branch=%s, commit=%s, success=%v",
+					result.Branch, result.Commit[:8], result.CleanupSuccess)
+				cleanupExecuted = true
+				break
+			}
+		}
+	}
+
+	if !cleanupExecuted {
+		log.Printf("❌ No cleanup execution found for timeout test")
+		return false
+	}
+
+	return true
+}
+
 // simulateActivity simulates development activity
 func (th *E2ETestHarness) simulateActivity() {
 	if th.testType == TestTimeout {
@@ -793,10 +871,14 @@ func (th *E2ETestHarness) printStatistics() {
 
 	if th.testType == TestTimeout {
 		log.Printf("   Timeout detected: %v", th.timeoutDetected)
+		cleanupExecuted := th.verifyCleanupExecuted()
+		log.Printf("   Cleanup executed: %v", cleanupExecuted)
 		if !th.timeoutDetected {
 			log.Println("⚠️  WARNING: Timeout test did not detect timeout!")
+		} else if !cleanupExecuted {
+			log.Println("⚠️  WARNING: Cleanup was not executed for timeout test!")
 		} else {
-			log.Println("✅ Timeout detection working correctly!")
+			log.Println("✅ Timeout detection and cleanup working correctly!")
 		}
 	} else {
 		if th.commitsCreated > 0 && th.totalTestsDetected == 0 {
@@ -846,10 +928,8 @@ func (th *E2ETestHarness) saveTestData() error {
 		return nil // Only save data for timeout tests
 	}
 
-	dataDir := "/tmp/home-ci-data"
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
-	}
+	// Use the data directory within our temp run directory
+	dataDir := filepath.Join(th.tempRunDir, "data")
 
 	// Create unique filename with timestamp
 	timestamp := time.Now().Format("20060102-150405")
@@ -910,12 +990,15 @@ func (th *E2ETestHarness) cleanupE2EResources() {
 		th.homeCIProcess.Wait()
 	}
 
-	// Skip e2e repository cleanup if no-cleanup flag is set
+	// Skip e2e temp directory cleanup if no-cleanup flag is set
 	if th.noCleanup {
-		log.Printf("🔍 Keeping e2e test repository for debugging: %s", th.testRepoPath)
-		log.Println("✅ E2E test harness cleanup completed (repository preserved)")
+		log.Printf("🔍 Keeping e2e test environment for debugging: %s", th.tempRunDir)
+		log.Printf("   Repository: %s", th.testRepoPath)
+		log.Printf("   Data: %s", filepath.Join(th.tempRunDir, "data"))
+		log.Println("✅ E2E test harness cleanup completed (environment preserved)")
 	} else {
-		log.Println("✅ E2E test harness cleanup completed")
+		log.Printf("✅ E2E test harness cleanup completed")
+		log.Printf("   Environment was: %s", th.tempRunDir)
 	}
 }
 
@@ -1038,7 +1121,7 @@ func main() {
 	// Determine success
 	success := true
 	if testType == TestTimeout {
-		success = th.timeoutDetected
+		success = th.timeoutDetected && th.verifyCleanupExecuted()
 	} else {
 		success = th.totalTestsDetected > 0
 	}

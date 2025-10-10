@@ -362,6 +362,11 @@ func (tr *TestRunner) runCleanupScript(tempDir, branch, commit string, logFile *
 		fmt.Sprintf("HOME_CI_TEMP_DIR=%s", tempDir),
 	)
 
+	// If HOME_CI_DATA_DIR is set in environment, pass it through
+	if dataDir := os.Getenv("HOME_CI_DATA_DIR"); dataDir != "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("HOME_CI_DATA_DIR=%s", dataDir))
+	}
+
 	// Create writers that output to both console and log file
 	cmd.Stdout = io.MultiWriter(os.Stdout, logFile)
 	cmd.Stderr = io.MultiWriter(os.Stderr, logFile)
@@ -398,9 +403,14 @@ func (tr *TestRunner) runCleanupScript(tempDir, branch, commit string, logFile *
 	return nil
 }
 
-// createCleanedFile creates a CLEANED file in /tmp/home-ci/data with same name as run-e2e.sh output
+// createCleanedFile creates a CLEANED file in the appropriate data directory
 func (tr *TestRunner) createCleanedFile(branch, commit string) error {
-	dataDir := "/tmp/home-ci/data"
+	// Use HOME_CI_DATA_DIR if set, otherwise fall back to default
+	dataDir := os.Getenv("HOME_CI_DATA_DIR")
+	if dataDir == "" {
+		dataDir = "/tmp/home-ci/data"
+	}
+
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}

@@ -1,6 +1,6 @@
 repo_path: "/tmp/test-repo-timeout"
 check_interval: 10s
-test_script: "_e2e/run-e2e.sh"
+test_script: "e2e/run-e2e.sh"
 options: "--timeout-test"
 max_commit_age: 240h
 test_timeout: 30s  # Short timeout to test timeout behavior
@@ -8,8 +8,8 @@ fetch_remote: false
 max_concurrent_runs: 1
 
 cleanup:
-  after_e2e: false
-  script: ""
+  after_e2e: true
+  script: "e2e/cleanup.sh"
 
 github_actions_dispatch:
   enabled: false

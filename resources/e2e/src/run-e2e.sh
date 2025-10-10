@@ -16,11 +16,27 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Create unique result file in /tmp/home-ci-data for cleanup validation
+# Create unique result file in the run's data directory for cleanup validation
 COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null | head -c 8 || echo "unknown")
 BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
 COMMIT_MESSAGE=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "unknown")
-DATA_DIR="/tmp/home-ci-data"
+
+# Find the data directory: use environment variable if set, otherwise auto-detect
+if [ -n "$HOME_CI_DATA_DIR" ]; then
+    DATA_DIR="$HOME_CI_DATA_DIR"
+else
+    # Try to find the data directory by going up from the current repo
+    REPO_DIR=$(pwd)
+    if [[ "$REPO_DIR" =~ /tmp/home-ci-[0-9]{8}-[0-9]{6}/ ]]; then
+        # Extract the base temp directory
+        TEMP_BASE=$(echo "$REPO_DIR" | grep -o '/tmp/home-ci-[0-9]\{8\}-[0-9]\{6\}')
+        DATA_DIR="$TEMP_BASE/data"
+    else
+        # Fallback to old behavior
+        DATA_DIR="/tmp/home-ci-data"
+    fi
+fi
+
 RESULT_FILE="$DATA_DIR/test-run-${BRANCH_NAME}-${COMMIT_HASH}.json"
 
 # Ensure data directory exists

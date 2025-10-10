@@ -34,13 +34,15 @@ git config core.pager cat
 
 # Create basic structure
 echo "Creating basic structure..."
-mkdir -p _e2e
+mkdir -p e2e
 
 # Copier le script e2e depuis le template du projet home-ci
 SCRIPT_DIR="$(dirname "$0")"
-cp "$SCRIPT_DIR/run-e2e.sh" _e2e/run-e2e.sh
+cp "$SCRIPT_DIR/run-e2e.sh" e2e/run-e2e.sh
+cp "$SCRIPT_DIR/src/cleanup.sh" e2e/cleanup.sh
 
-chmod +x _e2e/run-e2e.sh
+chmod +x e2e/run-e2e.sh
+chmod +x e2e/cleanup.sh
 
 # Create some basic files
 echo "# Test Repository" > README.md
