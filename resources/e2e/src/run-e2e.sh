@@ -37,7 +37,7 @@ else
     fi
 fi
 
-RESULT_FILE="$DATA_DIR/test-run-${BRANCH_NAME}-${COMMIT_HASH}.json"
+RESULT_FILE="$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_test-run.json"
 
 # Ensure data directory exists
 mkdir -p "$DATA_DIR"
@@ -130,7 +130,7 @@ case "$EXPECTED_BEHAVIOR" in
         echo "✅ All tests passed"
 
         # Create success marker file
-        echo "Test completed successfully" > "$DATA_DIR/SUCCESS_${BRANCH_NAME}_${COMMIT_HASH}.txt"
+        echo "Test completed successfully" > "$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_SUCCESS.txt"
         exit 0
         ;;
 
@@ -143,7 +143,7 @@ case "$EXPECTED_BEHAVIOR" in
         echo "❌ Error details: Simulated failure based on branch/commit pattern"
 
         # Create failure marker file
-        echo "Test failed as expected" > "$DATA_DIR/FAILURE_${BRANCH_NAME}_${COMMIT_HASH}.txt"
+        echo "Test failed as expected" > "$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_FAILURE.txt"
         exit 1
         ;;
 
