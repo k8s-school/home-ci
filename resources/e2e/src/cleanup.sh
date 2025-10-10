@@ -29,8 +29,6 @@ fi
 # Find all JSON result files created by e2e tests (support all naming conventions)
 json_files=$(find "$DATA_DIR" -name "*_run-product.json" -o -name "*_test-run.json" -o -name "test-run-*.json" 2>/dev/null || true)
 
-# Also find timeout test summary files for reference (these are harness metadata)
-summary_files=$(find "$DATA_DIR" -name "*_timeout-test-summary.json" -o -name "*_timeout-test-summary-*.json" -o -name "*_timeout-test-*.json" 2>/dev/null || true)
 
 if [ -z "$json_files" ]; then
     echo "ℹ️  No e2e data files found to clean"
@@ -97,18 +95,6 @@ done
 
 echo ""
 echo "🎯 Cleanup completed: $cleaned_count files processed"
-
-# Handle timeout test summary files (harness metadata)
-if [ -n "$summary_files" ]; then
-    echo ""
-    echo "📊 Processing timeout test summary files..."
-    for summary_file in $summary_files; do
-        if [ -f "$summary_file" ]; then
-            echo "   📋 Summary: $(basename "$summary_file")"
-            # These are metadata files, just report them
-        fi
-    done
-fi
 
 # Optional: Remove old cleaned files (older than 7 days)
 echo ""

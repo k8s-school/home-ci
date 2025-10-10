@@ -337,7 +337,8 @@ func (th *E2ETestHarness) runGitCommandWithOutput(args ...string) (string, error
 
 // createConfigFile creates configuration file from embedded resource
 func (th *E2ETestHarness) createConfigFile() (string, error) {
-	configPath := fmt.Sprintf("/tmp/home-ci-test-config-%d.yaml", time.Now().Unix())
+	// Place config file in the run's temp directory
+	configPath := filepath.Join(th.tempRunDir, "home-ci-config.yaml")
 
 	var configContent string
 	if th.testType == TestTimeout {
