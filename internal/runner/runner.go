@@ -415,10 +415,9 @@ func (tr *TestRunner) createCleanedFile(branch, commit string) error {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	// Create filename similar to what run-e2e.sh creates but with CLEANED prefix
-	timestamp := time.Now().Format("20060102-150405")
+	// Create filename using the new consistent naming convention (no timestamp suffix)
 	branchFile := strings.ReplaceAll(branch, "/", "-")
-	cleanedFileName := fmt.Sprintf("CLEANED_%s_%s_%s.txt", timestamp, branchFile, commit[:8])
+	cleanedFileName := fmt.Sprintf("%s-%s_CLEANED.txt", branchFile, commit[:8])
 	cleanedFilePath := filepath.Join(dataDir, cleanedFileName)
 
 	content := fmt.Sprintf("Cleanup completed for branch %s commit %s at %s\n",

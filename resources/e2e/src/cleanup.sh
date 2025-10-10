@@ -26,8 +26,11 @@ if [ ! -d "$DATA_DIR" ]; then
     exit 0
 fi
 
-# Find all JSON result files created by e2e tests
-json_files=$(find "$DATA_DIR" -name "test-run-*.json" 2>/dev/null || true)
+# Find all JSON result files created by e2e tests (support all naming conventions)
+json_files=$(find "$DATA_DIR" -name "*_run-product.json" -o -name "*_test-run.json" -o -name "test-run-*.json" 2>/dev/null || true)
+
+# Also find timeout test summary files for reference (these are harness metadata)
+summary_files=$(find "$DATA_DIR" -name "*_timeout-test-summary.json" -o -name "*_timeout-test-summary-*.json" -o -name "*_timeout-test-*.json" 2>/dev/null || true)
 
 if [ -z "$json_files" ]; then
     echo "ℹ️  No e2e data files found to clean"
@@ -72,12 +75,17 @@ for json_file in $json_files; do
 EOF
 
         # Also clean up associated marker files (SUCCESS, FAILURE, TIMEOUT)
-        marker_pattern="${DATA_DIR}/*_${branch}_${commit}.txt"
-        for marker_file in $marker_pattern; do
-            if [ -f "$marker_file" ]; then
-                echo "   🗑️  Removing marker: $(basename "$marker_file")"
-                rm -f "$marker_file"
-            fi
+        # Handle both old format (*_branch_commit.txt) and new format (branch-commit_*.txt)
+        old_marker_pattern="${DATA_DIR}/*_${branch}_${commit}.txt"
+        new_marker_pattern="${DATA_DIR}/${branch}-${commit}_*.txt"
+
+        for marker_pattern in "$old_marker_pattern" "$new_marker_pattern"; do
+            for marker_file in $marker_pattern; do
+                if [ -f "$marker_file" ]; then
+                    echo "   🗑️  Removing marker: $(basename "$marker_file")"
+                    rm -f "$marker_file"
+                fi
+            done
         done
 
         echo "   ✅ Created: $(basename "$cleaned_file")"
@@ -90,7 +98,20 @@ done
 echo ""
 echo "🎯 Cleanup completed: $cleaned_count files processed"
 
+# Handle timeout test summary files (harness metadata)
+if [ -n "$summary_files" ]; then
+    echo ""
+    echo "📊 Processing timeout test summary files..."
+    for summary_file in $summary_files; do
+        if [ -f "$summary_file" ]; then
+            echo "   📋 Summary: $(basename "$summary_file")"
+            # These are metadata files, just report them
+        fi
+    done
+fi
+
 # Optional: Remove old cleaned files (older than 7 days)
+echo ""
 echo "🗑️  Removing old cleaned files (>7 days)..."
 old_cleaned_files=$(find "$DATA_DIR" -name "*.CLEANED" -mtime +7 2>/dev/null || true)
 if [ -n "$old_cleaned_files" ]; then

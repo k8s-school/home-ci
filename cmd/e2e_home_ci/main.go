@@ -931,9 +931,35 @@ func (th *E2ETestHarness) saveTestData() error {
 	// Use the data directory within our temp run directory
 	dataDir := filepath.Join(th.tempRunDir, "data")
 
-	// Create unique filename with timestamp
-	timestamp := time.Now().Format("20060102-150405")
-	filename := fmt.Sprintf("timeout-test-%s.json", timestamp)
+	// Find the first timeout test result to get branch and commit info
+	branchCommit := "unknown-unknown"
+	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+	files, err := os.ReadDir(homeCIDir)
+	if err == nil {
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
+				jsonPath := filepath.Join(homeCIDir, file.Name())
+				content, readErr := os.ReadFile(jsonPath)
+				if readErr != nil {
+					continue
+				}
+
+				var result TestResult
+				if unmarshalErr := json.Unmarshal(content, &result); unmarshalErr != nil {
+					continue
+				}
+
+				if result.TimedOut {
+					branchSafe := strings.ReplaceAll(result.Branch, "/", "-")
+					branchCommit = fmt.Sprintf("%s-%s", branchSafe, result.Commit[:8])
+					break
+				}
+			}
+		}
+	}
+
+	// Create filename with branch-commit prefix (no timestamp suffix)
+	filename := fmt.Sprintf("%s_timeout-test-summary.json", branchCommit)
 	dataPath := filepath.Join(dataDir, filename)
 
 	// Collect test data

@@ -37,7 +37,7 @@ else
     fi
 fi
 
-RESULT_FILE="$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_test-run.json"
+RESULT_FILE="$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_run-product.json"
 
 # Ensure data directory exists
 mkdir -p "$DATA_DIR"
@@ -154,7 +154,7 @@ case "$EXPECTED_BEHAVIOR" in
         echo "⏳ Long-running operation starting..."
 
         # Create timeout marker file
-        echo "Test will timeout" > "$DATA_DIR/TIMEOUT_${BRANCH_NAME}_${COMMIT_HASH}.txt"
+        echo "Test will timeout" > "$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_TIMEOUT.txt"
 
         # Run longer than the typical timeout (45+ seconds)
         for i in {1..60}; do
