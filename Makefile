@@ -29,8 +29,8 @@ build:
 # Build the e2e test harness
 build-e2e:
 	@echo "🏗️  Building e2e test harness..."
-	go build -o e2e-home-ci ./cmd/e2e_home_ci
-	@echo "✅ Build complete: ./e2e_home_ci"
+	go build -o e2e-home-ci ./cmd/e2e-home-ci
+	@echo "✅ Build complete: ./e2e-home-ci"
 
 # Run integration tests (default duration)
 test: build build-e2e
