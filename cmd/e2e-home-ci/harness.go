@@ -18,7 +18,7 @@ import (
 func NewE2ETestHarness(testType TestType, duration time.Duration, noCleanup bool) *E2ETestHarness {
 	// Create unique temporary directory for this run
 	timestamp := time.Now().Format("20060102-150405")
-	tempRunDir := fmt.Sprintf("/tmp/home-ci-%s", timestamp)
+	tempRunDir := fmt.Sprintf("/tmp/e2e-home-ci/repo-%s", timestamp)
 
 	// Repository path within the temp run directory
 	repoName := fmt.Sprintf("test-repo-%s", testTypeName[testType])
@@ -51,14 +51,20 @@ func (th *E2ETestHarness) setupTestRepo() error {
 		log.Printf("🚀 Setting up test environment (%s)...", th.tempRunDir)
 	}
 
-	// Clean up existing temp run directory
-	if _, err := os.Stat(th.tempRunDir); err == nil {
+	// Clean up and initialize the entire /tmp/e2e-home-ci/ directory
+	e2eBaseDir := "/tmp/e2e-home-ci"
+	if _, err := os.Stat(e2eBaseDir); err == nil {
 		if th.testType != TestTimeout {
-			log.Printf("Removing existing temp run directory at %s", th.tempRunDir)
+			log.Printf("Cleaning up existing e2e directory at %s", e2eBaseDir)
 		}
-		if err := os.RemoveAll(th.tempRunDir); err != nil {
-			return fmt.Errorf("failed to remove existing temp dir: %w", err)
+		if err := os.RemoveAll(e2eBaseDir); err != nil {
+			return fmt.Errorf("failed to remove existing e2e directory: %w", err)
 		}
+	}
+
+	// Create the e2e base directory structure
+	if err := os.MkdirAll(e2eBaseDir, 0755); err != nil {
+		return fmt.Errorf("failed to create e2e base directory: %w", err)
 	}
 
 	// Create the temp run directory structure
@@ -67,7 +73,7 @@ func (th *E2ETestHarness) setupTestRepo() error {
 	}
 
 	// Create data subdirectory for test data files
-	dataDir := filepath.Join(th.tempRunDir, "data")
+	dataDir := "/tmp/e2e-home-ci/data"
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
@@ -127,7 +133,7 @@ func (th *E2ETestHarness) startHomeCI(configPath string) error {
 	th.homeCIProcess = exec.CommandContext(th.homeCIContext, "./home-ci", "-c", configPath, "-v", verbosity)
 
 	// Set environment variable for data directory
-	dataDir := filepath.Join(th.tempRunDir, "data")
+	dataDir := "/tmp/e2e-home-ci/data"
 	th.homeCIProcess.Env = append(os.Environ(), fmt.Sprintf("HOME_CI_DATA_DIR=%s", dataDir))
 
 	if err := th.homeCIProcess.Start(); err != nil {
@@ -207,7 +213,7 @@ func (th *E2ETestHarness) saveTestData() error {
 	}
 
 	// Use the data directory within our temp run directory
-	dataDir := filepath.Join(th.tempRunDir, "data")
+	dataDir := "/tmp/e2e-home-ci/data"
 
 	// Find the first timeout test result to get branch and commit info
 	branchCommit := "unknown-unknown"

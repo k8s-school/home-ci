@@ -21,21 +21,8 @@ COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null | head -c 8 || echo "unknown")
 BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
 COMMIT_MESSAGE=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "unknown")
 
-# Find the data directory: use environment variable if set, otherwise auto-detect
-if [ -n "$HOME_CI_DATA_DIR" ]; then
-    DATA_DIR="$HOME_CI_DATA_DIR"
-else
-    # Try to find the data directory by going up from the current repo
-    REPO_DIR=$(pwd)
-    if [[ "$REPO_DIR" =~ /tmp/home-ci-[0-9]{8}-[0-9]{6}/ ]]; then
-        # Extract the base temp directory
-        TEMP_BASE=$(echo "$REPO_DIR" | grep -o '/tmp/home-ci-[0-9]\{8\}-[0-9]\{6\}')
-        DATA_DIR="$TEMP_BASE/data"
-    else
-        # Fallback to old behavior
-        DATA_DIR="/tmp/home-ci-data"
-    fi
-fi
+# E2E tests always use the standardized data directory
+DATA_DIR="/tmp/e2e-home-ci/data"
 
 RESULT_FILE="$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_run-product.json"
 

@@ -174,7 +174,11 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	slog.Debug("Test output will be logged", "log_file", logFilePath)
 
 	// Create temporary directory for cloning
-	tempDir, err := os.MkdirTemp("/tmp", fmt.Sprintf("ci-test-%s-%s-", branchFile, commit[:8]))
+	timestamp := time.Now().Format("20060102-150405")
+	tempDir := fmt.Sprintf("/tmp/home-ci/%s-%s-%s", branchFile, commit[:8], timestamp)
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to create temporary directory: %w", err)
 	}
@@ -337,7 +341,7 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	return err
 }
 
-// runCleanupScript executes the cleanup script and creates a CLEANED file in /tmp/home-ci/data
+// runCleanupScript executes the cleanup script
 func (tr *TestRunner) runCleanupScript(tempDir, branch, commit string, logFile *os.File) error {
 	slog.Debug("Running cleanup script", "branch", branch, "commit", commit[:8], "script", tr.config.Cleanup.Script)
 
@@ -386,14 +390,6 @@ func (tr *TestRunner) runCleanupScript(tempDir, branch, commit string, logFile *
 		return fmt.Errorf("cleanup script failed: %w", err)
 	}
 
-	// Create CLEANED file in /tmp/home-ci/data
-	if createErr := tr.createCleanedFile(branch, commit); createErr != nil {
-		slog.Debug("Failed to create CLEANED file", "error", createErr)
-		fmt.Fprintf(logFile, "\n=== CLEANED File Creation Failed ===\n")
-		fmt.Fprintf(logFile, "Error: %v\n", createErr)
-		fmt.Fprintf(logFile, "====================================\n")
-		// Don't return error here as cleanup script succeeded
-	}
 
 	slog.Debug("Cleanup script completed", "branch", branch, "commit", commit[:8], "duration", duration)
 	fmt.Fprintf(logFile, "\n=== Cleanup Script Completed ===\n")
@@ -403,33 +399,6 @@ func (tr *TestRunner) runCleanupScript(tempDir, branch, commit string, logFile *
 	return nil
 }
 
-// createCleanedFile creates a CLEANED file in the appropriate data directory
-func (tr *TestRunner) createCleanedFile(branch, commit string) error {
-	// Use HOME_CI_DATA_DIR if set, otherwise fall back to default
-	dataDir := os.Getenv("HOME_CI_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/tmp/home-ci/data"
-	}
-
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
-	}
-
-	// Create filename using the new consistent naming convention (no timestamp suffix)
-	branchFile := strings.ReplaceAll(branch, "/", "-")
-	cleanedFileName := fmt.Sprintf("%s-%s_CLEANED.txt", branchFile, commit[:8])
-	cleanedFilePath := filepath.Join(dataDir, cleanedFileName)
-
-	content := fmt.Sprintf("Cleanup completed for branch %s commit %s at %s\n",
-		branch, commit, time.Now().Format(time.RFC3339))
-
-	if err := os.WriteFile(cleanedFilePath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to create CLEANED file: %w", err)
-	}
-
-	slog.Debug("Created CLEANED file", "file", cleanedFilePath)
-	return nil
-}
 
 // saveTestResult saves the test result to a JSON file
 func (tr *TestRunner) saveTestResult(result TestResult, filePath string) error {

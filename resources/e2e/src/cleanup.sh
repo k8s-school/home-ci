@@ -1,21 +1,8 @@
 #!/bin/bash
 set -e
 
-# Find the data directory: use environment variable if set, otherwise auto-detect
-if [ -n "$HOME_CI_DATA_DIR" ]; then
-    DATA_DIR="$HOME_CI_DATA_DIR"
-else
-    # Try to find the data directory by going up from the current repo
-    REPO_DIR=$(pwd)
-    if [[ "$REPO_DIR" =~ /tmp/home-ci-[0-9]{8}-[0-9]{6}/ ]]; then
-        # Extract the base temp directory
-        TEMP_BASE=$(echo "$REPO_DIR" | grep -o '/tmp/home-ci-[0-9]\{8\}-[0-9]\{6\}')
-        DATA_DIR="$TEMP_BASE/data"
-    else
-        # Fallback to old behavior
-        DATA_DIR="/tmp/home-ci-data"
-    fi
-fi
+# E2E tests always use the standardized data directory
+DATA_DIR="/tmp/e2e-home-ci/data"
 
 echo "=== E2E Cleanup Script ==="
 echo "Scanning for data files in: $DATA_DIR"
