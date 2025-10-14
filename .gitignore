@@ -32,6 +32,9 @@ go.work.sum
 # env file
 .env
 
+# Secret files
+secret.yaml
+
 # Editor/IDE
 # .idea/
 # .vscode/

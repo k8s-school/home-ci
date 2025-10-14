@@ -1,0 +1,29 @@
+name: Repository Dispatch Test
+
+on:
+  repository_dispatch:
+    types: [test-home-ci]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Echo dispatch event
+        run: |
+          echo "Repository dispatch received!"
+          echo "Event type: ${{ github.event.action }}"
+          echo "Client payload: ${{ toJson(github.event.client_payload) }}"
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run home-ci test
+        run: |
+          echo "Running home-ci dispatch test..."
+          # Add your home-ci specific test commands here
+          go version
