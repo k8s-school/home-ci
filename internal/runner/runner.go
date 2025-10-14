@@ -448,10 +448,4 @@ func (tr *TestRunner) saveTestResult(result TestResult, filePath string) error {
 	return nil
 }
 
-// notifyGitHubActions sends a notification to GitHub Actions (placeholder implementation)
-func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool) error {
-	// TODO: Implement GitHub Actions notification
-	// This is a placeholder for the actual implementation
-	slog.Debug("GitHub Actions notification", "branch", branch, "commit", commit[:8], "success", success)
-	return nil
-}
+// Note: notifyGitHubActions is now implemented in github_dispatch.go

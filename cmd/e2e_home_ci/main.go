@@ -25,7 +25,16 @@ const (
 	TestTimeout
 	TestQuick
 	TestLong
+	TestDispatch
 )
+
+var testTypeName = map[TestType]string{
+	TestNormal:   "normal",
+	TestTimeout:  "timeout",
+	TestQuick:    "quick",
+	TestLong:     "long",
+	TestDispatch: "dispatch",
+}
 
 // RunningTest represents a test currently in progress
 type RunningTest struct {
@@ -61,10 +70,9 @@ func NewE2ETestHarness(testType TestType, duration time.Duration, noCleanup bool
 	tempRunDir := fmt.Sprintf("/tmp/home-ci-%s", timestamp)
 
 	// Repository path within the temp run directory
-	repoName := "test-repo"
-	if testType == TestTimeout {
-		repoName = "test-repo-timeout"
-	}
+
+	repoName := fmt.Sprintf("test-repo-%s", testTypeName[testType])
+
 	repoPath := filepath.Join(tempRunDir, repoName)
 
 	return &E2ETestHarness{
@@ -345,6 +353,10 @@ func (th *E2ETestHarness) createConfigFile() (string, error) {
 		configContent = resources.ConfigTimeout
 		// Replace repo path in timeout config
 		configContent = strings.ReplaceAll(configContent, "/tmp/test-repo-timeout", th.testRepoPath)
+	} else if th.testType == TestDispatch {
+		configContent = resources.ConfigDispatch
+		// Replace repo path in dispatch config
+		configContent = strings.ReplaceAll(configContent, "/tmp/test-repo-home-ci", th.testRepoPath)
 	} else {
 		configContent = resources.ConfigNormal
 		// Replace repo path in normal config
@@ -594,14 +606,14 @@ type TestExpectationConfig struct {
 
 // ValidationResult represents the result of validating test expectations
 type ValidationResult struct {
-	TotalTests         int `json:"total_tests"`
-	ExpectedSuccesses  int `json:"expected_successes"`
-	ExpectedFailures   int `json:"expected_failures"`
-	ExpectedTimeouts   int `json:"expected_timeouts"`
-	ActualSuccesses    int `json:"actual_successes"`
-	ActualFailures     int `json:"actual_failures"`
-	ActualTimeouts     int `json:"actual_timeouts"`
-	CorrectPredictions int `json:"correct_predictions"`
+	TotalTests         int     `json:"total_tests"`
+	ExpectedSuccesses  int     `json:"expected_successes"`
+	ExpectedFailures   int     `json:"expected_failures"`
+	ExpectedTimeouts   int     `json:"expected_timeouts"`
+	ActualSuccesses    int     `json:"actual_successes"`
+	ActualFailures     int     `json:"actual_failures"`
+	ActualTimeouts     int     `json:"actual_timeouts"`
+	CorrectPredictions int     `json:"correct_predictions"`
 	ValidationScore    float64 `json:"validation_score"`
 }
 
@@ -918,6 +930,8 @@ func (th *E2ETestHarness) getTestTypeName() string {
 		return "Quick Test"
 	case TestLong:
 		return "Long Test"
+	case TestDispatch:
+		return "Dispatch Test"
 	default:
 		return "Normal Test"
 	}
@@ -1038,6 +1052,8 @@ func parseTestType(s string) TestType {
 		return TestQuick
 	case "long":
 		return TestLong
+	case "dispatch":
+		return TestDispatch
 	default:
 		return TestNormal
 	}
@@ -1045,8 +1061,8 @@ func parseTestType(s string) TestType {
 
 func main() {
 	var (
-		testTypeFlag = flag.String("type", "normal", "Test type: normal, timeout, quick, long")
-		durationFlag = flag.String("duration", "3m", "Test duration (e.g., 30s, 5m, 1h)")
+		testTypeFlag  = flag.String("type", "normal", "Test type: normal, timeout, quick, long, dispatch")
+		durationFlag  = flag.String("duration", "3m", "Test duration (e.g., 30s, 5m, 1h)")
 		noCleanupFlag = flag.Bool("no-cleanup", false, "Keep test repositories for debugging")
 		helpFlag      = flag.Bool("help", false, "Show help")
 	)
@@ -1066,6 +1082,7 @@ func main() {
 		fmt.Println("  timeout  - Test timeout handling (~1 minute)")
 		fmt.Println("  quick    - Quick test (30 seconds)")
 		fmt.Println("  long     - Extended test (specified duration)")
+		fmt.Println("  dispatch - Test GitHub Actions dispatch")
 		fmt.Println("")
 		fmt.Println("Examples:")
 		fmt.Println("  e2e_home_ci -type=normal -duration=5m")
@@ -1094,7 +1111,7 @@ func main() {
 	}
 
 	log.Printf("🚀 Starting e2e test harness (%s, %v)...",
-		map[TestType]string{TestNormal: "normal", TestTimeout: "timeout", TestQuick: "quick", TestLong: "long"}[testType],
+		map[TestType]string{TestNormal: "normal", TestTimeout: "timeout", TestQuick: "quick", TestLong: "long", TestDispatch: "dispatch"}[testType],
 		duration)
 
 	th := NewE2ETestHarness(testType, duration, *noCleanupFlag)

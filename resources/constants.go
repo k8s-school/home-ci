@@ -21,5 +21,8 @@ var ConfigNormal string
 //go:embed e2e/configs/config-timeout.yaml
 var ConfigTimeout string
 
+//go:embed e2e/configs/config-dispatch.yaml
+var ConfigDispatch string
+
 //go:embed e2e/test-expectations.yaml
 var TestExpectations string

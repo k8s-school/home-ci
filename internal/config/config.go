@@ -8,8 +8,10 @@ import (
 )
 
 type GitHubActionsDispatch struct {
-	Enabled    bool   `yaml:"enabled"`
-	GitHubRepo string `yaml:"github_repo"`
+	Enabled          bool   `yaml:"enabled"`
+	GitHubRepo       string `yaml:"github_repo"`
+	GitHubTokenFile  string `yaml:"github_token_file"`
+	DispatchType     string `yaml:"dispatch_type"`
 }
 
 type Cleanup struct {
@@ -48,8 +50,10 @@ func Load(path string) (Config, error) {
 			Script:   "",
 		},
 		GitHubActionsDispatch: GitHubActionsDispatch{
-			Enabled:    false,
-			GitHubRepo: "",
+			Enabled:         false,
+			GitHubRepo:      "",
+			GitHubTokenFile: "",
+			DispatchType:    "",
 		},
 	}
 
