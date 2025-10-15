@@ -137,7 +137,7 @@ func TestSendGitHubDispatch(t *testing.T) {
 	repoOwner := "testowner"
 	repoName := "testrepo"
 	token := "test_token_123"
-	eventType := "test-home-ci"
+	eventType := "test-home-ci-with-artifacts"
 	clientPayload := map[string]interface{}{
 		"branch":  "main",
 		"commit":  "abc123",
@@ -250,7 +250,7 @@ Test summary: 2/3 tests passed
 			Enabled:         true,
 			GitHubRepo:      "k8s-school/home-ci",
 			GitHubTokenFile: secretPath,
-			DispatchType:    "test-home-ci",
+			DispatchType:    "test-home-ci-with-artifacts",
 		},
 	}
 
