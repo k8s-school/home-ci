@@ -11,8 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	githubAPIVersion  = "2022-11-28"
+	githubAcceptType  = "application/vnd.github+json"
+	githubContentType = "application/json"
 )
 
 // GitHubDispatchPayload represents the payload sent to GitHub Actions
@@ -27,20 +34,36 @@ type SecretFile struct {
 	GitHubToken string `yaml:"github_token"`
 }
 
+// Artifact represents a file artifact in the dispatch payload
+type Artifact struct {
+	Content string `json:"content"`
+	Type    string `json:"type"`
+}
+
+// GitHubClient encapsulates GitHub API operations
+type GitHubClient struct {
+	httpClient *http.Client
+	token      string
+}
+
+// NewGitHubClient creates a new GitHub client with the given token
+func NewGitHubClient(token string) *GitHubClient {
+	return &GitHubClient{
+		httpClient: &http.Client{Timeout: 30 * time.Second},
+		token:      token,
+	}
+}
+
 // loadGitHubToken loads the GitHub token from the secret file
 func loadGitHubToken(secretFile string) (string, error) {
-	// If path is relative, make it absolute from current working directory
-	if !filepath.IsAbs(secretFile) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("failed to get current directory: %w", err)
-		}
-		secretFile = filepath.Join(cwd, secretFile)
+	absolutePath, err := makeAbsolutePath(secretFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve secret file path: %w", err)
 	}
 
-	data, err := os.ReadFile(secretFile)
+	data, err := os.ReadFile(absolutePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read secret file %s: %w", secretFile, err)
+		return "", fmt.Errorf("failed to read secret file %s: %w", absolutePath, err)
 	}
 
 	var secret SecretFile
@@ -55,14 +78,28 @@ func loadGitHubToken(secretFile string) (string, error) {
 	return secret.GitHubToken, nil
 }
 
-// sendGitHubDispatch sends a repository dispatch event to GitHub
-func sendGitHubDispatch(repoOwner, repoName, token, eventType string, clientPayload map[string]interface{}, inputs map[string]interface{}) error {
+// makeAbsolutePath converts relative paths to absolute paths
+func makeAbsolutePath(path string) (string, error) {
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	return filepath.Join(cwd, path), nil
+}
+
+// SendDispatch sends a repository dispatch event to GitHub
+func (gc *GitHubClient) SendDispatch(repoOwner, repoName, eventType string, clientPayload map[string]interface{}) error {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/dispatches", repoOwner, repoName)
 
 	payload := GitHubDispatchPayload{
 		EventType:     eventType,
 		ClientPayload: clientPayload,
-		Inputs:        inputs,
+		Inputs:        map[string]interface{}{}, // Keep empty as requested
 	}
 
 	jsonData, err := json.Marshal(payload)
@@ -75,13 +112,9 @@ func sendGitHubDispatch(repoOwner, repoName, token, eventType string, clientPayl
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("Content-Type", "application/json")
+	gc.setHeaders(req)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := gc.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -95,6 +128,14 @@ func sendGitHubDispatch(repoOwner, repoName, token, eventType string, clientPayl
 	return nil
 }
 
+// setHeaders sets the required headers for GitHub API requests
+func (gc *GitHubClient) setHeaders(req *http.Request) {
+	req.Header.Set("Accept", githubAcceptType)
+	req.Header.Set("Authorization", "Bearer "+gc.token)
+	req.Header.Set("X-GitHub-Api-Version", githubAPIVersion)
+	req.Header.Set("Content-Type", githubContentType)
+}
+
 // readFileAsBase64 reads a file and returns its content as base64 encoded string
 func readFileAsBase64(filePath string) (string, error) {
 	data, err := os.ReadFile(filePath)
@@ -104,72 +145,111 @@ func readFileAsBase64(filePath string) (string, error) {
 	return base64.StdEncoding.EncodeToString(data), nil
 }
 
-// notifyGitHubActions sends a notification to GitHub Actions via repository dispatch
-func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool, logFilePath, resultFilePath string) error {
-	config := tr.config.GitHubActionsDispatch
-
-	// Parse repository owner and name from github_repo config first
-	repoParts := strings.Split(config.GitHubRepo, "/")
-	if len(repoParts) != 2 {
-		return fmt.Errorf("invalid github_repo format, expected 'owner/repo', got '%s'", config.GitHubRepo)
+// parseRepoString parses "owner/repo" format and returns owner and repo name
+func parseRepoString(repoString string) (owner, name string, err error) {
+	parts := strings.Split(repoString, "/")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid repository format, expected 'owner/repo', got '%s'", repoString)
 	}
+	return parts[0], parts[1], nil
+}
 
-	// Load GitHub token from secret file
-	token, err := loadGitHubToken(config.GitHubTokenFile)
-	if err != nil {
-		return fmt.Errorf("failed to load GitHub token: %w", err)
-	}
-	repoOwner := repoParts[0]
-	repoName := repoParts[1]
+// createArtifactsMap creates the artifacts map for the dispatch payload
+func createArtifactsMap(branch, commit string, success bool, logFilePath, resultFilePath string) map[string]interface{} {
+	artifacts := make(map[string]interface{})
 
-	// Determine event type based on success and config
-	eventType := config.DispatchType
-	if eventType == "" {
-		if success {
-			eventType = "test-success"
-		} else {
-			eventType = "test-failure"
-		}
-	}
-
-	// Create client payload with artifacts
-	clientPayload := map[string]interface{}{
-		"branch":    branch,
-		"commit":    commit,
-		"success":   success,
-		"timestamp": fmt.Sprintf("%d", os.Getuid()), // Simple timestamp-like value
-		"source":    "home-ci",
-		"artifacts": map[string]interface{}{},
-	}
-
-	// Add log file as artifact if it exists
+	// Add log file artifact
 	if logFilePath != "" {
-		if logContent, err := readFileAsBase64(logFilePath); err == nil {
-			logFileName := filepath.Base(logFilePath)
-			clientPayload["artifacts"].(map[string]interface{})[logFileName] = map[string]interface{}{
-				"content": logContent,
-				"type":    "log",
+		if content, err := readFileAsBase64(logFilePath); err == nil {
+			fileName := filepath.Base(logFilePath)
+			artifacts[fileName] = Artifact{
+				Content: content,
+				Type:    "log",
 			}
-			slog.Debug("Added log file to dispatch payload", "file", logFileName, "size", len(logContent))
+			slog.Debug("Added log file to dispatch payload", "file", fileName, "size", len(content))
 		} else {
 			slog.Debug("Failed to read log file for dispatch", "file", logFilePath, "error", err)
 		}
 	}
 
-	// Add result JSON file as artifact if it exists
+	// Add result file artifact
 	if resultFilePath != "" {
-		if resultContent, err := readFileAsBase64(resultFilePath); err == nil {
-			resultFileName := filepath.Base(resultFilePath)
-			clientPayload["artifacts"].(map[string]interface{})[resultFileName] = map[string]interface{}{
-				"content": resultContent,
-				"type":    "result",
+		if content, err := readFileAsBase64(resultFilePath); err == nil {
+			fileName := filepath.Base(resultFilePath)
+			artifacts[fileName] = Artifact{
+				Content: content,
+				Type:    "result",
 			}
-			slog.Debug("Added result file to dispatch payload", "file", resultFileName, "size", len(resultContent))
+			slog.Debug("Added result file to dispatch payload", "file", fileName, "size", len(content))
 		} else {
 			slog.Debug("Failed to read result file for dispatch", "file", resultFilePath, "error", err)
 		}
 	}
 
+	// Add metadata artifact
+	artifacts["metadata"] = Artifact{
+		Content: "", // Metadata doesn't need base64 content
+		Type:    "metadata",
+	}
+
+	return artifacts
+}
+
+// createClientPayload creates the complete client payload for the dispatch
+func createClientPayload(branch, commit string, success bool, logFilePath, resultFilePath string) map[string]interface{} {
+	return map[string]interface{}{
+		"branch":    branch,
+		"commit":    commit,
+		"success":   success,
+		"timestamp": fmt.Sprintf("%d", time.Now().Unix()),
+		"source":    "home-ci",
+		"artifacts": createArtifactsMap(branch, commit, success, logFilePath, resultFilePath),
+		"metadata": map[string]interface{}{
+			"branch":  branch,
+			"commit":  commit,
+			"success": success,
+		},
+	}
+}
+
+// determineEventType determines the event type based on configuration and success status
+func determineEventType(configEventType string, success bool) string {
+	if configEventType != "" {
+		return configEventType
+	}
+
+	if success {
+		return "test-success"
+	}
+	return "test-failure"
+}
+
+// notifyGitHubActions sends a notification to GitHub Actions via repository dispatch
+func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool, logFilePath, resultFilePath string) error {
+	config := tr.config.GitHubActionsDispatch
+
+	// Parse repository owner and name
+	repoOwner, repoName, err := parseRepoString(config.GitHubRepo)
+	if err != nil {
+		return err
+	}
+
+	// Load GitHub token
+	token, err := loadGitHubToken(config.GitHubTokenFile)
+	if err != nil {
+		return fmt.Errorf("failed to load GitHub token: %w", err)
+	}
+
+	// Create GitHub client
+	client := NewGitHubClient(token)
+
+	// Determine event type
+	eventType := determineEventType(config.DispatchType, success)
+
+	// Create payload
+	clientPayload := createClientPayload(branch, commit, success, logFilePath, resultFilePath)
+
+	// Log dispatch attempt
 	slog.Debug("Sending GitHub Actions dispatch",
 		"repo", config.GitHubRepo,
 		"event_type", eventType,
@@ -177,22 +257,12 @@ func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool, l
 		"commit", commit[:8],
 		"success", success)
 
-	// Add metadata to artifacts
-	clientPayload["artifacts"].(map[string]interface{})["metadata"] = map[string]interface{}{
-		"branch":  branch,
-		"commit":  commit,
-		"success": success,
-		"type":    "metadata",
-	}
-
-	// Create empty inputs for GitHub Actions GUI
-	inputs := map[string]interface{}{}
-
-	err = sendGitHubDispatch(repoOwner, repoName, token, eventType, clientPayload, inputs)
-	if err != nil {
+	// Send dispatch
+	if err := client.SendDispatch(repoOwner, repoName, eventType, clientPayload); err != nil {
 		return fmt.Errorf("failed to send GitHub dispatch: %w", err)
 	}
 
+	// Log success
 	slog.Info("GitHub Actions dispatch sent successfully",
 		"repo", config.GitHubRepo,
 		"event_type", eventType,
