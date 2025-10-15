@@ -2,7 +2,7 @@ name: Repository Dispatch Test
 
 on:
   repository_dispatch:
-    types: [test-home-ci]
+    types: [test-home-ci, test-home-ci-artifacts]
 
 jobs:
   test:
@@ -16,6 +16,12 @@ jobs:
           echo "Repository dispatch received!"
           echo "Event type: ${{ github.event.action }}"
           echo "Client payload: ${{ toJson(github.event.client_payload) }}"
+
+      - name: Display artifacts
+        if: github.event.client_payload.artifacts
+        run: |
+          echo "Artifacts received:"
+          echo "${{ toJson(github.event.client_payload.artifacts) }}"
 
       - name: Setup Go
         uses: actions/setup-go@v4
