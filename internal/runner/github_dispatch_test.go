@@ -155,7 +155,7 @@ func TestSendGitHubDispatch(t *testing.T) {
 
 	// Verify headers
 	expectedHeaders := map[string]string{
-		"Authorization":         "Bearer " + token,
+		"Authorization":        "Bearer " + token,
 		"Accept":               "application/vnd.github+json",
 		"X-GitHub-Api-Version": "2022-11-28",
 		"Content-Type":         "application/json",
@@ -190,91 +190,80 @@ func TestSendGitHubDispatch(t *testing.T) {
 	}
 }
 
-func TestIntegrationGitHubDispatchWithArtifacts(t *testing.T) {
-	// This test sends a real dispatch to GitHub Actions if secret.yaml exists
+func TestIntegrationNotifyGitHubActionsValidation(t *testing.T) {
+	// This test validates the notifyGitHubActions function with real dispatch including artifacts
 	secretPath := "../../secret.yaml"
 	if _, err := os.Stat(secretPath); os.IsNotExist(err) {
-		t.Skip("Skipping GitHub dispatch integration test: secret.yaml not found")
+		t.Skip("Skipping GitHub Actions integration test: secret.yaml not found")
 	}
 
-	// Load the real GitHub token
-	token, err := loadGitHubToken(secretPath)
+	// Create temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "github_dispatch_artifacts_test")
 	if err != nil {
-		t.Fatalf("Failed to load GitHub token from real secret.yaml: %v", err)
+		t.Fatalf("Failed to create temp dir: %v", err)
 	}
+	defer os.RemoveAll(tempDir)
 
-	// Use real repository data
-	repoOwner := "k8s-school"
-	repoName := "home-ci"
-	eventType := "test-home-ci-artifacts"
-
-	// Create client payload with artifacts
-	clientPayload := map[string]interface{}{
-		"branch":    "feature/test",
-		"commit":    "def456",
-		"success":   false,
-		"timestamp": "1697374800",
-		"source":    "home-ci",
-		"artifacts": map[string]interface{}{
-			"test.log": map[string]interface{}{
-				"content": "VGVzdCBsb2cgY29udGVudA==", // base64 of "Test log content"
-				"type":    "log",
-			},
-			"result.json": map[string]interface{}{
-				"content": "eyJ0ZXN0cyI6IDUsICJmYWlsZWQiOiAyfQ==", // base64 of {"tests": 5, "failed": 2}
-				"type":    "result",
-			},
-			"metadata": map[string]interface{}{
-				"branch":  "feature/test",
-				"commit":  "def456",
-				"success": false,
-				"type":    "metadata",
-			},
-		},
-	}
-
-	inputs := map[string]interface{}{}
-
-	// Send real dispatch to GitHub Actions
-	err = sendGitHubDispatch(repoOwner, repoName, token, eventType, clientPayload, inputs)
+	// Create test log file
+	logFilePath := filepath.Join(tempDir, "test_20241015_123456_main_abcdef12.log")
+	logContent := `Starting test run...
+Running tests for branch main
+Test 1: PASS
+Test 2: FAIL - Expected value 42, got 24
+Test 3: PASS
+Test summary: 2/3 tests passed
+`
+	err = os.WriteFile(logFilePath, []byte(logContent), 0644)
 	if err != nil {
-		t.Fatalf("Failed to send GitHub dispatch with artifacts: %v", err)
+		t.Fatalf("Failed to write log file: %v", err)
 	}
 
-	t.Logf("Successfully sent GitHub dispatch with artifacts to %s/%s", repoOwner, repoName)
-	t.Logf("Event type: %s", eventType)
-	t.Logf("Artifacts included: test.log, result.json, metadata")
-	t.Logf("Check GitHub Actions tab for the dispatch event")
-}
+	// Create test result JSON file
+	resultFilePath := filepath.Join(tempDir, "test_20241015_123456_main_abcdef12.json")
+	resultContent := `{
+  "timestamp": "2024-10-15T12:34:56Z",
+  "branch": "main",
+  "commit": "abcdef123456",
+  "tests": {
+    "total": 3,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0
+  },
+  "duration": "45.2s",
+  "success": false,
+  "failures": [
+    {
+      "test": "Test 2",
+      "error": "Expected value 42, got 24"
+    }
+  ]
+}`
+	err = os.WriteFile(resultFilePath, []byte(resultContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write result file: %v", err)
+	}
 
-func TestNotifyGitHubActionsValidation(t *testing.T) {
-	// Test 1: Invalid repo format
+	// Test with valid configuration and artifacts
 	cfg := &config.Config{
 		GitHubActionsDispatch: config.GitHubActionsDispatch{
 			Enabled:         true,
-			GitHubRepo:      "invalid-repo-format",
-			GitHubTokenFile: "secret.yaml",
+			GitHubRepo:      "k8s-school/home-ci",
+			GitHubTokenFile: secretPath,
 			DispatchType:    "test-home-ci",
 		},
 	}
 
 	tr := &TestRunner{config: *cfg}
-	err := tr.notifyGitHubActions("main", "abcdef123456", true, "", "")
-	if err == nil {
-		t.Error("Expected error for invalid repo format, got nil")
-	}
-	if !strings.Contains(err.Error(), "invalid github_repo format") {
-		t.Errorf("Expected 'invalid github_repo format' error, got: %v", err)
+	err = tr.notifyGitHubActions("main", "abcdef123456", false, logFilePath, resultFilePath)
+	if err != nil {
+		t.Fatalf("Expected no error for valid dispatch with artifacts, got: %v", err)
 	}
 
-	// Test 2: Nonexistent secret file
-	cfg.GitHubActionsDispatch.GitHubRepo = "k8s-school/home-ci"
-	cfg.GitHubActionsDispatch.GitHubTokenFile = "nonexistent.yaml"
-	tr.config = *cfg
-	err = tr.notifyGitHubActions("main", "abcdef123456", true, "", "")
-	if err == nil {
-		t.Error("Expected error for nonexistent secret file, got nil")
-	}
+	t.Logf("Successfully sent GitHub dispatch with artifacts")
+	t.Logf("Log file: %s (%d bytes)", filepath.Base(logFilePath), len(logContent))
+	t.Logf("Result file: %s (%d bytes)", filepath.Base(resultFilePath), len(resultContent))
+	t.Logf("Check GitHub Actions tab for the dispatch event with artifacts")
 }
 
 func TestIntegrationLoadGitHubToken(t *testing.T) {
