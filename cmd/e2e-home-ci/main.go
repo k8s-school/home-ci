@@ -122,6 +122,9 @@ func main() {
 	// Display statistics
 	th.printStatistics()
 
+	// Analyze test results against expectations
+	th.analyzeTestResults()
+
 	// Clean up e2e test harness resources
 	th.cleanupE2EResources()
 

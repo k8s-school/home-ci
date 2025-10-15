@@ -174,7 +174,7 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	slog.Debug("Test output will be logged", "log_file", logFilePath)
 
 	// Create temporary directory for cloning
-	tempDir := fmt.Sprintf("/tmp/home-ci/%s-%s-%s", branchFile, commit[:8], timestamp)
+	tempDir := fmt.Sprintf("/tmp/home-ci/repos/%s-%s-%s", branchFile, commit[:8], timestamp)
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
@@ -182,16 +182,9 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	// Schedule cleanup based on KeepTime setting
 	if tr.config.KeepTime == 0 {
 		defer os.RemoveAll(tempDir) // Clean up immediately if KeepTime is 0
-	} else {
-		// Schedule cleanup after KeepTime duration
-		go func() {
-			time.Sleep(tr.config.KeepTime)
-			slog.Debug("Cleaning up repository after keep time", "temp_dir", tempDir, "keep_time", tr.config.KeepTime)
-			if err := os.RemoveAll(tempDir); err != nil {
-				slog.Debug("Failed to cleanup repository", "temp_dir", tempDir, "error", err)
-			}
-		}()
 	}
+	// For KeepTime > 0, rely on the periodic cleanup routine in monitor
+	// This ensures cleanup works even if home-ci is restarted
 
 	slog.Debug("Created temporary repository", "temp_dir", tempDir)
 

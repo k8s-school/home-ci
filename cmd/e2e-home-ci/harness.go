@@ -18,11 +18,10 @@ import (
 func NewE2ETestHarness(testType TestType, duration time.Duration, noCleanup bool) *E2ETestHarness {
 	// Create unique temporary directory for this run
 	timestamp := time.Now().Format("20060102-150405")
-	tempRunDir := fmt.Sprintf("/tmp/e2e-home-ci/repo-%s", timestamp)
+	tempRunDir := fmt.Sprintf("/tmp/home-ci/e2e/repo-%s", timestamp)
 
-	// Repository path within the temp run directory
-	repoName := fmt.Sprintf("test-repo-%s", testTypeName[testType])
-	repoPath := filepath.Join(tempRunDir, repoName)
+	// Use the temp run directory directly as the repository path
+	repoPath := tempRunDir
 
 	return &E2ETestHarness{
 		testType:     testType,
@@ -51,8 +50,8 @@ func (th *E2ETestHarness) setupTestRepo() error {
 		log.Printf("🚀 Setting up test environment (%s)...", th.tempRunDir)
 	}
 
-	// Clean up and initialize the entire /tmp/e2e-home-ci/ directory
-	e2eBaseDir := "/tmp/e2e-home-ci"
+	// Clean up and initialize the entire /tmp/home-ci/e2e/ directory
+	e2eBaseDir := "/tmp/home-ci/e2e"
 	if _, err := os.Stat(e2eBaseDir); err == nil {
 		if th.testType != TestTimeout {
 			log.Printf("Cleaning up existing e2e directory at %s", e2eBaseDir)
@@ -73,7 +72,7 @@ func (th *E2ETestHarness) setupTestRepo() error {
 	}
 
 	// Create data subdirectory for test data files
-	dataDir := "/tmp/e2e-home-ci/data"
+	dataDir := "/tmp/home-ci/e2e/data"
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
@@ -133,7 +132,7 @@ func (th *E2ETestHarness) startHomeCI(configPath string) error {
 	th.homeCIProcess = exec.CommandContext(th.homeCIContext, "./home-ci", "-c", configPath, "-v", verbosity)
 
 	// Set environment variable for data directory
-	dataDir := "/tmp/e2e-home-ci/data"
+	dataDir := "/tmp/home-ci/e2e/data"
 	th.homeCIProcess.Env = append(os.Environ(), fmt.Sprintf("HOME_CI_DATA_DIR=%s", dataDir))
 
 	if err := th.homeCIProcess.Start(); err != nil {
@@ -213,7 +212,7 @@ func (th *E2ETestHarness) saveTestData() error {
 	}
 
 	// Use the data directory within our temp run directory
-	dataDir := "/tmp/e2e-home-ci/data"
+	dataDir := "/tmp/home-ci/e2e/data"
 
 	// Find the first timeout test result to get branch and commit info
 	branchCommit := "unknown-unknown"
@@ -309,6 +308,100 @@ func (th *E2ETestHarness) cleanupE2EResources() {
 	} else {
 		log.Printf("✅ E2E test harness cleanup completed")
 		log.Printf("   Environment was: %s", th.tempRunDir)
+	}
+}
+
+// analyzeTestResults compares actual test results against expected outcomes
+func (th *E2ETestHarness) analyzeTestResults() {
+	log.Println("")
+	log.Println("=== Test Results Analysis ===")
+
+	// Read the home-ci test results
+	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+	files, err := os.ReadDir(homeCIDir)
+	if err != nil {
+		log.Printf("⚠️ Could not read test results directory: %v", err)
+		return
+	}
+
+	totalTests := 0
+	successfulTests := 0
+	failedTests := 0
+	timedOutTests := 0
+
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
+			jsonPath := filepath.Join(homeCIDir, file.Name())
+			content, readErr := os.ReadFile(jsonPath)
+			if readErr != nil {
+				continue
+			}
+
+			var result TestResult
+			if unmarshalErr := json.Unmarshal(content, &result); unmarshalErr != nil {
+				continue
+			}
+
+			totalTests++
+
+			// Determine expected behavior for this branch/commit
+			expectedBehavior := th.determineExpectedBehavior(result.Branch, result.Commit)
+
+			// Determine actual behavior
+			var actualBehavior string
+			if result.TimedOut {
+				actualBehavior = "timeout"
+				timedOutTests++
+			} else if result.Success {
+				actualBehavior = "success"
+				successfulTests++
+			} else {
+				actualBehavior = "failure"
+				failedTests++
+			}
+
+			// Compare expected vs actual
+			status := "SUCCESS"
+			if expectedBehavior != actualBehavior {
+				status = "ERROR"
+			}
+
+			log.Printf("Branch: %s | Commit: %.8s", result.Branch, result.Commit)
+			log.Printf("  Expected: %s | Actual: %s | Status: %s", expectedBehavior, actualBehavior, status)
+		}
+	}
+
+	log.Printf("")
+	log.Printf("Summary: %d total tests (%d success, %d failed, %d timeout)",
+		totalTests, successfulTests, failedTests, timedOutTests)
+	log.Println("===============================")
+}
+
+// determineExpectedBehavior determines what the expected test outcome should be for a given branch/commit
+func (th *E2ETestHarness) determineExpectedBehavior(branch, commit string) string {
+	// This logic should match the logic in run-e2e.sh
+	// For timeout tests, we expect timeout behavior unless overridden
+	if th.testType == TestTimeout {
+		return "timeout"
+	}
+
+	// Check branch patterns (simplified version of run-e2e.sh logic)
+	switch branch {
+	case "main":
+		return "success"
+	case "feature/test1":
+		return "success"
+	case "feature/test2":
+		return "failure"
+	case "bugfix/critical":
+		return "timeout"
+	default:
+		if strings.HasPrefix(branch, "feature/") {
+			return "success"
+		} else if strings.HasPrefix(branch, "bugfix/") {
+			return "failure"
+		}
+		return "success" // Default
 	}
 }
 

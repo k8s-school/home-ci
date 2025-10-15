@@ -14,13 +14,13 @@ var CleanupE2EScript string
 
 // Configuration files embedded as string resources
 //
-//go:embed e2e/configs/config-normal.yaml
+//go:embed e2e/conf/config-normal.yaml
 var ConfigNormal string
 
-//go:embed e2e/configs/config-timeout.yaml
+//go:embed e2e/conf/config-timeout.yaml
 var ConfigTimeout string
 
-//go:embed e2e/configs/config-dispatch.yaml
+//go:embed e2e/conf/config-dispatch.yaml
 var ConfigDispatch string
 
 //go:embed e2e/test-expectations.yaml

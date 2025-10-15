@@ -21,10 +21,12 @@ COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null | head -c 8 || echo "unknown")
 BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
 COMMIT_MESSAGE=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "unknown")
 
-# E2E tests always use the standardized data directory
-DATA_DIR="/tmp/e2e-home-ci/data"
+# E2E tests use the standardized data directory (can be overridden by environment)
+DATA_DIR="${HOME_CI_DATA_DIR:-/tmp/home-ci/e2e/data}"
 
-RESULT_FILE="$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_run-product.json"
+# Sanitize branch name for file system (replace / with -)
+BRANCH_SAFE=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+RESULT_FILE="$DATA_DIR/${BRANCH_SAFE}-${COMMIT_HASH}_run-product.json"
 
 # Ensure data directory exists
 mkdir -p "$DATA_DIR"
@@ -117,7 +119,7 @@ case "$EXPECTED_BEHAVIOR" in
         echo "✅ All tests passed"
 
         # Create success marker file
-        echo "Test completed successfully" > "$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_SUCCESS.txt"
+        echo "Test completed successfully" > "$DATA_DIR/${BRANCH_SAFE}-${COMMIT_HASH}_SUCCESS.txt"
         exit 0
         ;;
 
@@ -130,7 +132,7 @@ case "$EXPECTED_BEHAVIOR" in
         echo "❌ Error details: Simulated failure based on branch/commit pattern"
 
         # Create failure marker file
-        echo "Test failed as expected" > "$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_FAILURE.txt"
+        echo "Test failed as expected" > "$DATA_DIR/${BRANCH_SAFE}-${COMMIT_HASH}_FAILURE.txt"
         exit 1
         ;;
 
@@ -141,7 +143,7 @@ case "$EXPECTED_BEHAVIOR" in
         echo "⏳ Long-running operation starting..."
 
         # Create timeout marker file
-        echo "Test will timeout" > "$DATA_DIR/${BRANCH_NAME}-${COMMIT_HASH}_TIMEOUT.txt"
+        echo "Test will timeout" > "$DATA_DIR/${BRANCH_SAFE}-${COMMIT_HASH}_TIMEOUT.txt"
 
         # Run longer than the typical timeout (45+ seconds)
         for i in {1..60}; do

@@ -6,7 +6,8 @@ help:
 	@echo "==============================="
 	@echo ""
 	@echo "Build targets:"
-	@echo "  build               Build the home-ci binary"
+	@echo "  build               Build everything (home-ci + e2e test harness)"
+	@echo "  build-home-ci       Build the home-ci binary"
 	@echo "  build-e2e           Build the e2e test harness"
 	@echo "  clean               Clean build artifacts"
 	@echo ""
@@ -20,8 +21,11 @@ help:
 	@echo "  make build && make test"
 	@echo "  make test-quick"
 
+# Build everything
+build: build-home-ci build-e2e
+
 # Build the main binary
-build:
+build-home-ci:
 	@echo "🏗️  Building home-ci..."
 	go build -o home-ci ./cmd/home-ci
 	@echo "✅ Build complete: ./home-ci"
@@ -33,22 +37,22 @@ build-e2e:
 	@echo "✅ Build complete: ./e2e-home-ci"
 
 # Run integration tests (default duration)
-test: build build-e2e
+test: build
 	@echo "🧪 Running integration tests..."
 	./e2e-home-ci -type=normal -duration=3m
 
 # Run quick tests
-test-quick: build build-e2e
+test-quick: build
 	@echo "⚡ Running quick integration tests..."
 	./e2e-home-ci -type=quick -duration=30s
 
 # Run extended tests
-test-long: build build-e2e
+test-long: build
 	@echo "🐌 Running extended integration tests..."
 	./e2e-home-ci -type=long -duration=10m
 
 # Run timeout validation test
-test-timeout: build build-e2e
+test-timeout: build
 	@echo "🕐 Running timeout validation test..."
 	./e2e-home-ci -type=timeout
 
@@ -61,7 +65,7 @@ clean:
 	rm -rf /tmp/test-repo-timeout
 	rm -f /tmp/home-ci-test-config-*.yaml
 	@echo "✅ Clean complete"
-	@echo "💾 Test data preserved in /tmp/home-ci-data/"
+	@echo "💾 Test data preserved in /tmp/home-ci/e2e/data/"
 
 # Development helpers
 dev-deps:

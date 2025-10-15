@@ -66,7 +66,13 @@ func (m *Monitor) Start() error {
 
 	// Start cleanup routine if KeepTime is configured
 	if m.config.KeepTime > 0 {
-		go m.startCleanupRoutine()
+		// Run initial cleanup to handle repositories from previous sessions
+		go func() {
+			slog.Debug("Running initial cleanup for repositories from previous sessions")
+			m.cleanupOldRepositories()
+			// Start the periodic cleanup routine
+			m.startCleanupRoutine()
+		}()
 	}
 
 	// Start monitoring loop
@@ -183,11 +189,25 @@ func (m *Monitor) startCleanupRoutine() {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
+	// Also run cleanup more frequently for the first few cycles to catch any missed repositories
+	initialTicker := time.NewTicker(5 * time.Minute)
+	initialCount := 0
+	const maxInitialRuns = 3
+
 	for {
 		select {
 		case <-m.ctx.Done():
 			slog.Debug("Stopping cleanup routine")
+			initialTicker.Stop()
 			return
+		case <-initialTicker.C:
+			if initialCount < maxInitialRuns {
+				slog.Debug("Running frequent initial cleanup", "run", initialCount+1, "max", maxInitialRuns)
+				m.cleanupOldRepositories()
+				initialCount++
+			} else {
+				initialTicker.Stop()
+			}
 		case <-ticker.C:
 			m.cleanupOldRepositories()
 		}
@@ -196,7 +216,7 @@ func (m *Monitor) startCleanupRoutine() {
 
 // cleanupOldRepositories removes repository directories older than KeepTime
 func (m *Monitor) cleanupOldRepositories() {
-	homeCiDir := "/tmp/home-ci"
+	homeCiDir := "/tmp/home-ci/repos"
 
 	// Check if the directory exists
 	if _, err := os.Stat(homeCiDir); os.IsNotExist(err) {
@@ -205,7 +225,7 @@ func (m *Monitor) cleanupOldRepositories() {
 
 	entries, err := os.ReadDir(homeCiDir)
 	if err != nil {
-		slog.Debug("Failed to read /tmp/home-ci directory", "error", err)
+		slog.Debug("Failed to read /tmp/home-ci/repos directory", "error", err)
 		return
 	}
 

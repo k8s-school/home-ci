@@ -65,10 +65,7 @@ func Load(path string) (Config, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return config, nil // Use defaults
-		}
-		return config, err
+		return config, err // Fail if file cannot be read (including if it doesn't exist)
 	}
 
 	if err := yaml.Unmarshal(data, &config); err != nil {
