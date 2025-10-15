@@ -16,11 +16,9 @@ import (
 )
 
 func NewE2ETestHarness(testType TestType, duration time.Duration, noCleanup bool) *E2ETestHarness {
-	// Use a fixed directory name for simplicity
-	tempRunDir := "/tmp/home-ci/e2e/repo"
-
-	// Use the temp run directory directly as the repository path
-	repoPath := tempRunDir
+	// Use test type specific directories
+	tempRunDir := testType.getTestDirectory()
+	repoPath := testType.getRepoPath()
 
 	return &E2ETestHarness{
 		testType:     testType,
@@ -49,29 +47,23 @@ func (th *E2ETestHarness) setupTestRepo() error {
 		log.Printf("🚀 Setting up test environment (%s)...", th.tempRunDir)
 	}
 
-	// Clean up and initialize the entire /tmp/home-ci/e2e/ directory
-	e2eBaseDir := "/tmp/home-ci/e2e"
-	if _, err := os.Stat(e2eBaseDir); err == nil {
+	// Clean up and initialize the test type specific directory
+	if _, err := os.Stat(th.tempRunDir); err == nil {
 		if th.testType != TestTimeout {
-			log.Printf("Cleaning up existing e2e directory at %s", e2eBaseDir)
+			log.Printf("Cleaning up existing test directory at %s", th.tempRunDir)
 		}
-		if err := os.RemoveAll(e2eBaseDir); err != nil {
-			return fmt.Errorf("failed to remove existing e2e directory: %w", err)
+		if err := os.RemoveAll(th.tempRunDir); err != nil {
+			return fmt.Errorf("failed to remove existing test directory: %w", err)
 		}
 	}
 
-	// Create the e2e base directory structure
-	if err := os.MkdirAll(e2eBaseDir, 0755); err != nil {
-		return fmt.Errorf("failed to create e2e base directory: %w", err)
-	}
-
-	// Create the temp run directory structure
+	// Create the test type directory structure
 	if err := os.MkdirAll(th.tempRunDir, 0755); err != nil {
-		return fmt.Errorf("failed to create temp run directory: %w", err)
+		return fmt.Errorf("failed to create test directory: %w", err)
 	}
 
 	// Create data subdirectory for test data files
-	dataDir := "/tmp/home-ci/e2e/data"
+	dataDir := th.testType.getDataPath()
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
@@ -131,7 +123,7 @@ func (th *E2ETestHarness) startHomeCI(configPath string) error {
 	th.homeCIProcess = exec.CommandContext(th.homeCIContext, "./home-ci", "-c", configPath, "-v", verbosity)
 
 	// Set environment variable for data directory
-	dataDir := "/tmp/home-ci/e2e/data"
+	dataDir := th.testType.getDataPath()
 	th.homeCIProcess.Env = append(os.Environ(), fmt.Sprintf("HOME_CI_DATA_DIR=%s", dataDir))
 
 	if err := th.homeCIProcess.Start(); err != nil {
@@ -148,14 +140,11 @@ func (th *E2ETestHarness) startHomeCI(configPath string) error {
 	return nil
 }
 
-// simulateActivity simulates development activity
+// simulateActivity simulates development activity based on test type
 func (th *E2ETestHarness) simulateActivity() {
-	if th.testType == TestTimeout {
-		// For timeout tests, just create one commit to trigger the test
-		log.Println("📝 Creating commit to trigger timeout test...")
-		if err := th.createCommit("main"); err != nil {
-			log.Printf("❌ Failed to create commit: %v", err)
-		}
+	// Single commit tests don't need additional activity
+	if th.testType.isSingleCommitTest() {
+		log.Printf("📝 Single commit test (%s) - no additional activity needed", testTypeName[th.testType])
 		return
 	}
 
@@ -210,8 +199,8 @@ func (th *E2ETestHarness) saveTestData() error {
 		return nil // Only save data for timeout tests
 	}
 
-	// Use the data directory within our temp run directory
-	dataDir := "/tmp/home-ci/e2e/data"
+	// Use the data directory within our test type directory
+	dataDir := th.testType.getDataPath()
 
 	// Find the first timeout test result to get branch and commit info
 	branchCommit := "unknown-unknown"

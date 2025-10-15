@@ -11,9 +11,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// writeConfigFile writes a specific config file to /tmp/home-ci/e2e/
+// writeConfigFile writes a specific config file to the test type directory
 func (th *E2ETestHarness) writeConfigFile(configType, fileName, content string) error {
-	configPath := filepath.Join("/tmp/home-ci/e2e", fileName)
+	// Create the test directory if it doesn't exist
+	testDir := th.testType.getTestDirectory()
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		return fmt.Errorf("failed to create test directory %s: %w", testDir, err)
+	}
+
+	configPath := filepath.Join(testDir, fileName)
 
 	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to create %s config file: %w", configType, err)
@@ -27,30 +33,34 @@ func (th *E2ETestHarness) writeConfigFile(configType, fileName, content string) 
 
 // createConfigFile creates configuration file from embedded resource for current test type
 func (th *E2ETestHarness) createConfigFile() (string, error) {
-	var configFileName string
-	var configContent string
-	var configType string
-
-	if th.testType == TestTimeout {
-		configFileName = "config-timeout.yaml"
-		configContent = resources.ConfigTimeout
-		configType = "Timeout"
-	} else if th.testType == TestDispatch {
-		configFileName = "config-dispatch.yaml"
-		configContent = resources.ConfigDispatch
-		configType = "Dispatch"
-	} else {
-		configFileName = "config-normal.yaml"
-		configContent = resources.ConfigNormal
-		configType = "Normal"
-	}
+	configFileName, configContent, configType := th.getConfigForTestType()
 
 	if err := th.writeConfigFile(configType, configFileName, configContent); err != nil {
 		return "", err
 	}
 
-	configPath := filepath.Join("/tmp/home-ci/e2e", configFileName)
+	configPath := filepath.Join(th.testType.getTestDirectory(), configFileName)
 	return configPath, nil
+}
+
+// getConfigForTestType returns config file name, content and type for the current test type
+func (th *E2ETestHarness) getConfigForTestType() (string, string, string) {
+	switch th.testType {
+	case TestSuccess:
+		return "config-success.yaml", resources.ConfigSuccess, "Success"
+	case TestFail:
+		return "config-fail.yaml", resources.ConfigFail, "Fail"
+	case TestTimeout:
+		return "config-timeout.yaml", resources.ConfigTimeout, "Timeout"
+	case TestDispatch:
+		return "config-dispatch.yaml", resources.ConfigDispatch, "Dispatch"
+	case TestQuick:
+		return "config-quick.yaml", resources.ConfigQuick, "Quick"
+	case TestLong:
+		return "config-long.yaml", resources.ConfigLong, "Long"
+	default: // TestNormal
+		return "config-normal.yaml", resources.ConfigNormal, "Normal"
+	}
 }
 
 // createAllConfigFiles creates all configuration files for init command
@@ -60,9 +70,13 @@ func (th *E2ETestHarness) createAllConfigFiles() error {
 		fileName string
 		content  string
 	}{
-		{"Normal", "config-normal.yaml", resources.ConfigNormal},
+		{"Success", "config-success.yaml", resources.ConfigSuccess},
+		{"Fail", "config-fail.yaml", resources.ConfigFail},
 		{"Timeout", "config-timeout.yaml", resources.ConfigTimeout},
 		{"Dispatch", "config-dispatch.yaml", resources.ConfigDispatch},
+		{"Quick", "config-quick.yaml", resources.ConfigQuick},
+		{"Normal", "config-normal.yaml", resources.ConfigNormal},
+		{"Long", "config-long.yaml", resources.ConfigLong},
 	}
 
 	for _, config := range configTypes {

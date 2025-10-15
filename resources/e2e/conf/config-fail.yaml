@@ -1,9 +1,9 @@
-repo_path: "/tmp/home-ci/e2e/normal/repo"
-check_interval: 30s
+repo_path: "/tmp/home-ci/e2e/fail/repo"
+check_interval: 10s
 test_script: "e2e/run-e2e.sh"
-options: "-c -i ztf"
+options: "--fail-test"  # Option to force test failure
 max_commit_age: 240h
-test_timeout: 10m
+test_timeout: 2m
 fetch_remote: false
 max_concurrent_runs: 1
 

@@ -2,26 +2,34 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
+	"path/filepath"
 	"time"
 )
 
 type TestType int
 
 const (
-	TestNormal TestType = iota
+	// Single commit tests (unit tests)
+	TestSuccess TestType = iota
+	TestFail
 	TestTimeout
-	TestQuick
-	TestLong
 	TestDispatch
+	// Multi commit tests
+	TestQuick
+	TestNormal
+	TestLong
 )
 
 var testTypeName = map[TestType]string{
-	TestNormal:   "normal",
+	TestSuccess:  "success",
+	TestFail:     "fail",
 	TestTimeout:  "timeout",
-	TestQuick:    "quick",
-	TestLong:     "long",
 	TestDispatch: "dispatch",
+	TestQuick:    "quick",
+	TestNormal:   "normal",
+	TestLong:     "long",
 }
 
 // RunningTest represents a test currently in progress
@@ -108,17 +116,46 @@ type ValidationResult struct {
 // parseTestType parses test type from string
 func parseTestType(s string) TestType {
 	switch s {
+	case "success":
+		return TestSuccess
+	case "fail":
+		return TestFail
 	case "timeout":
 		return TestTimeout
+	case "dispatch":
+		return TestDispatch
 	case "quick":
 		return TestQuick
 	case "long":
 		return TestLong
-	case "dispatch":
-		return TestDispatch
 	default:
 		return TestNormal
 	}
+}
+
+// isSingleCommitTest returns true for tests that need only one commit
+func (tt TestType) isSingleCommitTest() bool {
+	return tt == TestSuccess || tt == TestFail || tt == TestTimeout || tt == TestDispatch
+}
+
+// isMultiCommitTest returns true for tests that need multiple commits
+func (tt TestType) isMultiCommitTest() bool {
+	return tt == TestQuick || tt == TestNormal || tt == TestLong
+}
+
+// getTestDirectory returns the base directory for this test type
+func (tt TestType) getTestDirectory() string {
+	return fmt.Sprintf("/tmp/home-ci/e2e/%s", testTypeName[tt])
+}
+
+// getRepoPath returns the repository path for this test type
+func (tt TestType) getRepoPath() string {
+	return filepath.Join(tt.getTestDirectory(), "repo")
+}
+
+// getDataPath returns the data directory path for this test type
+func (tt TestType) getDataPath() string {
+	return filepath.Join(tt.getTestDirectory(), "data")
 }
 
 // helper function for min

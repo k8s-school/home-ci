@@ -24,7 +24,7 @@ const (
 	logDisplayCount = 5
 )
 
-// initializeGitRepo initializes the git repository (logic from setup-test-repo.sh)
+// initializeGitRepo initializes the git repository based on test type
 func (th *E2ETestHarness) initializeGitRepo() error {
 	if err := th.setupGitEnvironment(); err != nil {
 		return err
@@ -34,27 +34,15 @@ func (th *E2ETestHarness) initializeGitRepo() error {
 		return err
 	}
 
-	if err := th.createInitialFiles(); err != nil {
-		return err
+	// Create repository content based on test type
+	switch {
+	case th.testType.isSingleCommitTest():
+		return th.createSingleCommitRepository()
+	case th.testType == TestQuick:
+		return th.createQuickTestRepository()
+	default: // TestNormal, TestLong
+		return th.createMultiBranchRepository()
 	}
-
-	if err := th.createInitialCommit(); err != nil {
-		return err
-	}
-
-	if th.testType != TestTimeout {
-		if err := th.createTestBranches(); err != nil {
-			return err
-		}
-
-		if err := th.createMainUpdates(); err != nil {
-			return err
-		}
-
-		th.displayRepositoryState()
-	}
-
-	return nil
 }
 
 // setupGitEnvironment sets up the git environment
@@ -248,6 +236,119 @@ func (th *E2ETestHarness) createMainUpdate(update string, index int) error {
 	if err := th.runGitCommand("git", "commit", "-m", update); err != nil {
 		return fmt.Errorf("failed to commit %s: %w", update, err)
 	}
+	return nil
+}
+
+// createSingleCommitRepository creates a repository with a single commit based on test type
+func (th *E2ETestHarness) createSingleCommitRepository() error {
+	if err := th.createInitialFiles(); err != nil {
+		return err
+	}
+
+	if err := th.createInitialCommit(); err != nil {
+		return err
+	}
+
+	// Create specific commit based on test type
+	var commitMessage, fileName, content string
+	switch th.testType {
+	case TestSuccess:
+		commitMessage = "SUCCESS: This commit should pass"
+		fileName = "success.txt"
+		content = "This file should make the test succeed"
+	case TestFail:
+		commitMessage = "FAIL: This commit should fail"
+		fileName = "fail.txt"
+		content = "This file should make the test fail"
+	case TestTimeout:
+		commitMessage = "TIMEOUT: This commit should timeout"
+		fileName = "timeout.txt"
+		content = "This file should make the test timeout"
+	case TestDispatch:
+		commitMessage = "Dispatch test commit"
+		fileName = "dispatch.txt"
+		content = "This commit should trigger GitHub Actions dispatch"
+	}
+
+	filePath := filepath.Join(th.testRepoPath, fileName)
+	if err := os.WriteFile(filePath, []byte(content), filePerm); err != nil {
+		return fmt.Errorf("failed to create %s: %w", fileName, err)
+	}
+
+	if err := th.runGitCommand("git", "add", fileName); err != nil {
+		return fmt.Errorf("failed to add %s: %w", fileName, err)
+	}
+
+	if err := th.runGitCommand("git", "commit", "-m", commitMessage); err != nil {
+		return fmt.Errorf("failed to commit %s: %w", commitMessage, err)
+	}
+
+	if th.testType != TestTimeout {
+		th.displayRepositoryState()
+	}
+	return nil
+}
+
+// createQuickTestRepository creates a repository with 4 test commits
+func (th *E2ETestHarness) createQuickTestRepository() error {
+	if err := th.createInitialFiles(); err != nil {
+		return err
+	}
+
+	if err := th.createInitialCommit(); err != nil {
+		return err
+	}
+
+	// Create 4 commits for different test scenarios
+	testCases := []struct {
+		message  string
+		fileName string
+		content  string
+	}{
+		{"SUCCESS: Quick test success case", "quick-success.txt", "This should succeed quickly"},
+		{"FAIL: Quick test failure case", "quick-fail.txt", "This should fail quickly"},
+		{"TIMEOUT: Quick test timeout case", "quick-timeout.txt", "This should timeout quickly"},
+		{"Quick test dispatch case", "quick-dispatch.txt", "This should trigger dispatch"},
+	}
+
+	for _, testCase := range testCases {
+		filePath := filepath.Join(th.testRepoPath, testCase.fileName)
+		if err := os.WriteFile(filePath, []byte(testCase.content), filePerm); err != nil {
+			return fmt.Errorf("failed to create %s: %w", testCase.fileName, err)
+		}
+
+		if err := th.runGitCommand("git", "add", testCase.fileName); err != nil {
+			return fmt.Errorf("failed to add %s: %w", testCase.fileName, err)
+		}
+
+		if err := th.runGitCommand("git", "commit", "-m", testCase.message); err != nil {
+			return fmt.Errorf("failed to commit %s: %w", testCase.message, err)
+		}
+	}
+
+	th.displayRepositoryState()
+	return nil
+}
+
+// createMultiBranchRepository creates a repository with multiple branches (original logic)
+func (th *E2ETestHarness) createMultiBranchRepository() error {
+	if err := th.createInitialFiles(); err != nil {
+		return err
+	}
+
+	if err := th.createInitialCommit(); err != nil {
+		return err
+	}
+
+	if err := th.createTestBranches(); err != nil {
+		return err
+	}
+
+	if err := th.createMainUpdates(); err != nil {
+		return err
+	}
+
+	th.displayRepositoryState()
 	return nil
 }
 

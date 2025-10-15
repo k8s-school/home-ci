@@ -1,4 +1,4 @@
-repo_path: "/tmp/home-ci/e2e/dispatch/repo"
+repo_path: "/tmp/home-ci/e2e/long/repo"
 check_interval: 30s
 test_script: "e2e/run-e2e.sh"
 options: "-c -i ztf"
@@ -12,7 +12,5 @@ cleanup:
   script: ""
 
 github_actions_dispatch:
-  enabled: true
-  github_repo: "k8s-school/home-ci"
-  github_token_file: "secret.yaml"
-  dispatch_type: "test-home-ci"
+  enabled: false
+  github_repo: ""
