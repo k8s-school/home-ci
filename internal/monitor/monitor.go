@@ -64,6 +64,11 @@ func (m *Monitor) Start() error {
 	// Start test runner goroutine
 	go m.testRunner.Start()
 
+	// Start cleanup routine if KeepTime is configured
+	if m.config.KeepTime > 0 {
+		go m.startCleanupRoutine()
+	}
+
 	// Start monitoring loop
 	ticker := time.NewTicker(m.config.CheckInterval)
 	defer ticker.Stop()
@@ -160,4 +165,80 @@ func (m *Monitor) processBranchWithDateFilter(branchName string) error {
 	}
 
 	return nil
+}
+
+// startCleanupRoutine periodically cleans up old repository directories in /tmp/home-ci
+func (m *Monitor) startCleanupRoutine() {
+	// Run cleanup every hour or every KeepTime/2, whichever is smaller
+	cleanupInterval := time.Hour
+	if m.config.KeepTime < 2*time.Hour {
+		cleanupInterval = m.config.KeepTime / 2
+	}
+	if cleanupInterval < 10*time.Minute {
+		cleanupInterval = 10 * time.Minute // Minimum cleanup interval
+	}
+
+	slog.Debug("Starting cleanup routine", "interval", cleanupInterval, "keep_time", m.config.KeepTime)
+
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			slog.Debug("Stopping cleanup routine")
+			return
+		case <-ticker.C:
+			m.cleanupOldRepositories()
+		}
+	}
+}
+
+// cleanupOldRepositories removes repository directories older than KeepTime
+func (m *Monitor) cleanupOldRepositories() {
+	homeCiDir := "/tmp/home-ci"
+
+	// Check if the directory exists
+	if _, err := os.Stat(homeCiDir); os.IsNotExist(err) {
+		return // Nothing to clean up
+	}
+
+	entries, err := os.ReadDir(homeCiDir)
+	if err != nil {
+		slog.Debug("Failed to read /tmp/home-ci directory", "error", err)
+		return
+	}
+
+	cutoffTime := time.Now().Add(-m.config.KeepTime)
+	cleaned := 0
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		dirPath := filepath.Join(homeCiDir, entry.Name())
+
+		// Get directory creation/modification time
+		dirInfo, err := os.Stat(dirPath)
+		if err != nil {
+			slog.Debug("Failed to stat directory", "dir", dirPath, "error", err)
+			continue
+		}
+
+		// Check if directory is older than KeepTime
+		if dirInfo.ModTime().Before(cutoffTime) {
+			age := time.Since(dirInfo.ModTime())
+			slog.Debug("Removing old repository directory", "dir", dirPath, "age", age.Truncate(time.Minute))
+			if err := os.RemoveAll(dirPath); err != nil {
+				slog.Debug("Failed to remove old repository directory", "dir", dirPath, "error", err)
+			} else {
+				cleaned++
+			}
+		}
+	}
+
+	if cleaned > 0 {
+		slog.Debug("Cleanup completed", "removed_directories", cleaned, "keep_time", m.config.KeepTime)
+	}
 }

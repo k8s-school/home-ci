@@ -36,21 +36,21 @@ type RunningTest struct {
 
 // TestResult represents the complete result of a test execution
 type TestResult struct {
-	Branch                  string        `json:"branch"`
-	Commit                  string        `json:"commit"`
-	LogFile                 string        `json:"log_file"`
-	StartTime               time.Time     `json:"start_time"`
-	EndTime                 time.Time     `json:"end_time"`
-	Duration                time.Duration `json:"duration"`
-	Success                 bool          `json:"success"`
-	TimedOut                bool          `json:"timed_out"`
-	CleanupExecuted         bool          `json:"cleanup_executed"`
-	CleanupSuccess          bool          `json:"cleanup_success"`
-	GitHubActionsNotified   bool          `json:"github_actions_notified"`
-	GitHubActionsSuccess    bool          `json:"github_actions_success"`
-	ErrorMessage            string        `json:"error_message,omitempty"`
-	CleanupErrorMessage     string        `json:"cleanup_error_message,omitempty"`
-	GitHubActionsErrorMessage string      `json:"github_actions_error_message,omitempty"`
+	Branch                    string        `json:"branch"`
+	Commit                    string        `json:"commit"`
+	LogFile                   string        `json:"log_file"`
+	StartTime                 time.Time     `json:"start_time"`
+	EndTime                   time.Time     `json:"end_time"`
+	Duration                  time.Duration `json:"duration"`
+	Success                   bool          `json:"success"`
+	TimedOut                  bool          `json:"timed_out"`
+	CleanupExecuted           bool          `json:"cleanup_executed"`
+	CleanupSuccess            bool          `json:"cleanup_success"`
+	GitHubActionsNotified     bool          `json:"github_actions_notified"`
+	GitHubActionsSuccess      bool          `json:"github_actions_success"`
+	ErrorMessage              string        `json:"error_message,omitempty"`
+	CleanupErrorMessage       string        `json:"cleanup_error_message,omitempty"`
+	GitHubActionsErrorMessage string        `json:"github_actions_error_message,omitempty"`
 }
 
 type TestRunner struct {
@@ -174,15 +174,24 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	slog.Debug("Test output will be logged", "log_file", logFilePath)
 
 	// Create temporary directory for cloning
-	timestamp := time.Now().Format("20060102-150405")
 	tempDir := fmt.Sprintf("/tmp/home-ci/%s-%s-%s", branchFile, commit[:8], timestamp)
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
-	if err != nil {
-		return fmt.Errorf("failed to create temporary directory: %w", err)
+
+	// Schedule cleanup based on KeepTime setting
+	if tr.config.KeepTime == 0 {
+		defer os.RemoveAll(tempDir) // Clean up immediately if KeepTime is 0
+	} else {
+		// Schedule cleanup after KeepTime duration
+		go func() {
+			time.Sleep(tr.config.KeepTime)
+			slog.Debug("Cleaning up repository after keep time", "temp_dir", tempDir, "keep_time", tr.config.KeepTime)
+			if err := os.RemoveAll(tempDir); err != nil {
+				slog.Debug("Failed to cleanup repository", "temp_dir", tempDir, "error", err)
+			}
+		}()
 	}
-	defer os.RemoveAll(tempDir) // Clean up temp directory
 
 	slog.Debug("Created temporary repository", "temp_dir", tempDir)
 
@@ -390,7 +399,6 @@ func (tr *TestRunner) runCleanupScript(tempDir, branch, commit string, logFile *
 		return fmt.Errorf("cleanup script failed: %w", err)
 	}
 
-
 	slog.Debug("Cleanup script completed", "branch", branch, "commit", commit[:8], "duration", duration)
 	fmt.Fprintf(logFile, "\n=== Cleanup Script Completed ===\n")
 	fmt.Fprintf(logFile, "Duration: %s\n", duration)
@@ -398,7 +406,6 @@ func (tr *TestRunner) runCleanupScript(tempDir, branch, commit string, logFile *
 
 	return nil
 }
-
 
 // saveTestResult saves the test result to a JSON file
 func (tr *TestRunner) saveTestResult(result TestResult, filePath string) error {

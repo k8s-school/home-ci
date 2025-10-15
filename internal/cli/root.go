@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/k8s-school/ciux/log"
 	"github.com/spf13/cobra"
@@ -17,6 +18,7 @@ import (
 var (
 	configPath string
 	verbose    bool
+	keepTime   string
 )
 
 var RootCmd = &cobra.Command{
@@ -35,6 +37,15 @@ and automatically runs tests when changes are detected.`,
 		cfg, err := config.Load(configPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		// Parse and set the KeepTime from command line
+		if keepTime != "" {
+			duration, err := time.ParseDuration(keepTime)
+			if err != nil {
+				return fmt.Errorf("invalid keep-time duration: %w", err)
+			}
+			cfg.KeepTime = duration
 		}
 
 		monitor, err := monitor.NewMonitor(cfg)
@@ -59,4 +70,5 @@ and automatically runs tests when changes are detected.`,
 func init() {
 	RootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to configuration file")
 	RootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging (debug level)")
+	RootCmd.Flags().StringVar(&keepTime, "keep-time", "", "Keep cloned repositories for specified duration (e.g., '2h', '30m', '1h30m') before cleaning up")
 }

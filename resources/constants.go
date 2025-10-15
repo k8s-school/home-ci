@@ -5,16 +5,15 @@ import (
 )
 
 // Test scripts embedded as string resources
+//
 //go:embed e2e/src/run-e2e.sh
 var RunE2EScript string
-
-//go:embed e2e/setup-test-repo.sh
-var SetupTestRepoScript string
 
 //go:embed e2e/cleanup_e2e.sh
 var CleanupE2EScript string
 
 // Configuration files embedded as string resources
+//
 //go:embed e2e/configs/config-normal.yaml
 var ConfigNormal string
 
