@@ -12,13 +12,44 @@ import (
 	"github.com/k8s-school/home-ci/internal/runner"
 )
 
+const (
+	// Directory names
+	homeCIDirName    = ".home-ci"
+	stateFileName    = "state.json"
+	tmpHomeCIRepos   = "/tmp/home-ci/repos"
+
+	// Cleanup intervals
+	defaultCleanupInterval = time.Hour
+	minCleanupInterval     = 10 * time.Minute
+	initialCleanupInterval = 5 * time.Minute
+	maxInitialCleanupRuns  = 3
+
+	// Directory permissions
+	dirPerm = 0755
+)
+
 type Monitor struct {
 	config       config.Config
 	gitRepo      *GitRepository
 	stateManager *StateManager
 	testRunner   *runner.TestRunner
+	cleanupMgr   *CleanupManager
 	ctx          context.Context
 	cancel       context.CancelFunc
+}
+
+// CleanupManager handles repository cleanup operations
+type CleanupManager struct {
+	keepTime     time.Duration
+	ctx          context.Context
+}
+
+// NewCleanupManager creates a new cleanup manager
+func NewCleanupManager(keepTime time.Duration, ctx context.Context) *CleanupManager {
+	return &CleanupManager{
+		keepTime: keepTime,
+		ctx:      ctx,
+	}
 }
 
 func NewMonitor(cfg config.Config) (*Monitor, error) {
@@ -30,22 +61,24 @@ func NewMonitor(cfg config.Config) (*Monitor, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create .home-ci directory in repo for logs and state
-	homeCIDir := filepath.Join(cfg.RepoPath, ".home-ci")
-	if err := os.MkdirAll(homeCIDir, 0755); err != nil {
+	homeCIDir := filepath.Join(cfg.RepoPath, homeCIDirName)
+	if err := os.MkdirAll(homeCIDir, dirPerm); err != nil {
 		return nil, fmt.Errorf("failed to create .home-ci directory: %w", err)
 	}
 
 	logDir := homeCIDir
-	stateFile := filepath.Join(homeCIDir, "state.json")
+	stateFile := filepath.Join(homeCIDir, stateFileName)
 	stateManager := NewStateManager(stateFile)
 
 	testRunner := runner.NewTestRunner(cfg, logDir, ctx, stateManager)
+	cleanupMgr := NewCleanupManager(cfg.KeepTime, ctx)
 
 	m := &Monitor{
 		config:       cfg,
 		gitRepo:      gitRepo,
 		stateManager: stateManager,
 		testRunner:   testRunner,
+		cleanupMgr:   cleanupMgr,
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -66,13 +99,7 @@ func (m *Monitor) Start() error {
 
 	// Start cleanup routine if KeepTime is configured
 	if m.config.KeepTime > 0 {
-		// Run initial cleanup to handle repositories from previous sessions
-		go func() {
-			slog.Debug("Running initial cleanup for repositories from previous sessions")
-			m.cleanupOldRepositories()
-			// Start the periodic cleanup routine
-			m.startCleanupRoutine()
-		}()
+		go m.cleanupMgr.startCleanupRoutine()
 	}
 
 	// Start monitoring loop
@@ -108,28 +135,39 @@ func (m *Monitor) Stop() {
 func (m *Monitor) checkForUpdates() error {
 	slog.Debug("Checking for updates")
 
-	// Fetch latest changes only if enabled
-	if m.config.FetchRemote {
-		if err := m.gitRepo.FetchRemote(); err != nil {
-			return fmt.Errorf("failed to fetch remote: %w", err)
-		}
+	if err := m.fetchRemoteIfEnabled(); err != nil {
+		return err
 	}
 
-	// Get all branches
 	branches, err := m.gitRepo.GetBranches()
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}
 
+	m.processBranches(branches)
+	return m.stateManager.SaveState()
+}
+
+// fetchRemoteIfEnabled fetches remote changes if enabled in config
+func (m *Monitor) fetchRemoteIfEnabled() error {
+	if !m.config.FetchRemote {
+		return nil
+	}
+
+	if err := m.gitRepo.FetchRemote(); err != nil {
+		return fmt.Errorf("failed to fetch remote: %w", err)
+	}
+	return nil
+}
+
+// processBranches processes all branches for new commits
+func (m *Monitor) processBranches(branches []string) {
 	for _, branch := range branches {
-		// slog.Debug("Processing branch", "branch", branch)
 		if err := m.processBranchWithDateFilter(branch); err != nil {
 			slog.Debug("Error processing branch", "branch", branch, "error", err)
 			continue
 		}
 	}
-
-	return m.stateManager.SaveState()
 }
 
 func (m *Monitor) processBranchWithDateFilter(branchName string) error {
@@ -174,62 +212,81 @@ func (m *Monitor) processBranchWithDateFilter(branchName string) error {
 }
 
 // startCleanupRoutine periodically cleans up old repository directories in /tmp/home-ci
-func (m *Monitor) startCleanupRoutine() {
-	// Run cleanup every hour or every KeepTime/2, whichever is smaller
-	cleanupInterval := time.Hour
-	if m.config.KeepTime < 2*time.Hour {
-		cleanupInterval = m.config.KeepTime / 2
-	}
-	if cleanupInterval < 10*time.Minute {
-		cleanupInterval = 10 * time.Minute // Minimum cleanup interval
+func (cm *CleanupManager) startCleanupRoutine() {
+	if cm.keepTime <= 0 {
+		return
 	}
 
-	slog.Debug("Starting cleanup routine", "interval", cleanupInterval, "keep_time", m.config.KeepTime)
+	// Run initial cleanup to handle repositories from previous sessions
+	slog.Debug("Running initial cleanup for repositories from previous sessions")
+	cm.cleanupOldRepositories()
+
+	cleanupInterval := cm.calculateCleanupInterval()
+	slog.Debug("Starting cleanup routine", "interval", cleanupInterval, "keep_time", cm.keepTime)
 
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	// Also run cleanup more frequently for the first few cycles to catch any missed repositories
-	initialTicker := time.NewTicker(5 * time.Minute)
+	initialTicker := time.NewTicker(initialCleanupInterval)
 	initialCount := 0
-	const maxInitialRuns = 3
 
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-cm.ctx.Done():
 			slog.Debug("Stopping cleanup routine")
 			initialTicker.Stop()
 			return
 		case <-initialTicker.C:
-			if initialCount < maxInitialRuns {
-				slog.Debug("Running frequent initial cleanup", "run", initialCount+1, "max", maxInitialRuns)
-				m.cleanupOldRepositories()
+			if initialCount < maxInitialCleanupRuns {
+				slog.Debug("Running frequent initial cleanup", "run", initialCount+1, "max", maxInitialCleanupRuns)
+				cm.cleanupOldRepositories()
 				initialCount++
 			} else {
 				initialTicker.Stop()
 			}
 		case <-ticker.C:
-			m.cleanupOldRepositories()
+			cm.cleanupOldRepositories()
 		}
 	}
 }
 
-// cleanupOldRepositories removes repository directories older than KeepTime
-func (m *Monitor) cleanupOldRepositories() {
-	homeCiDir := "/tmp/home-ci/repos"
+// calculateCleanupInterval determines the appropriate cleanup interval
+func (cm *CleanupManager) calculateCleanupInterval() time.Duration {
+	// Run cleanup every hour or every KeepTime/2, whichever is smaller
+	cleanupInterval := defaultCleanupInterval
+	if cm.keepTime < 2*time.Hour {
+		cleanupInterval = cm.keepTime / 2
+	}
+	if cleanupInterval < minCleanupInterval {
+		cleanupInterval = minCleanupInterval
+	}
+	return cleanupInterval
+}
 
+// cleanupOldRepositories removes repository directories older than KeepTime
+func (cm *CleanupManager) cleanupOldRepositories() {
 	// Check if the directory exists
-	if _, err := os.Stat(homeCiDir); os.IsNotExist(err) {
+	if _, err := os.Stat(tmpHomeCIRepos); os.IsNotExist(err) {
 		return // Nothing to clean up
 	}
 
-	entries, err := os.ReadDir(homeCiDir)
+	entries, err := os.ReadDir(tmpHomeCIRepos)
 	if err != nil {
-		slog.Debug("Failed to read /tmp/home-ci/repos directory", "error", err)
+		slog.Debug("Failed to read repository directory", "dir", tmpHomeCIRepos, "error", err)
 		return
 	}
 
-	cutoffTime := time.Now().Add(-m.config.KeepTime)
+	cutoffTime := time.Now().Add(-cm.keepTime)
+	cleaned := cm.cleanupDirectories(entries, cutoffTime)
+
+	if cleaned > 0 {
+		slog.Debug("Cleanup completed", "removed_directories", cleaned, "keep_time", cm.keepTime)
+	}
+}
+
+// cleanupDirectories processes directory entries for cleanup
+func (cm *CleanupManager) cleanupDirectories(entries []os.DirEntry, cutoffTime time.Time) int {
 	cleaned := 0
 
 	for _, entry := range entries {
@@ -237,28 +294,35 @@ func (m *Monitor) cleanupOldRepositories() {
 			continue
 		}
 
-		dirPath := filepath.Join(homeCiDir, entry.Name())
-
-		// Get directory creation/modification time
-		dirInfo, err := os.Stat(dirPath)
-		if err != nil {
-			slog.Debug("Failed to stat directory", "dir", dirPath, "error", err)
-			continue
-		}
-
-		// Check if directory is older than KeepTime
-		if dirInfo.ModTime().Before(cutoffTime) {
-			age := time.Since(dirInfo.ModTime())
-			slog.Debug("Removing old repository directory", "dir", dirPath, "age", age.Truncate(time.Minute))
-			if err := os.RemoveAll(dirPath); err != nil {
-				slog.Debug("Failed to remove old repository directory", "dir", dirPath, "error", err)
-			} else {
-				cleaned++
-			}
+		dirPath := filepath.Join(tmpHomeCIRepos, entry.Name())
+		if cm.shouldRemoveDirectory(dirPath, cutoffTime) {
+			cleaned++
 		}
 	}
 
-	if cleaned > 0 {
-		slog.Debug("Cleanup completed", "removed_directories", cleaned, "keep_time", m.config.KeepTime)
+	return cleaned
+}
+
+// shouldRemoveDirectory checks if a directory should be removed and removes it
+func (cm *CleanupManager) shouldRemoveDirectory(dirPath string, cutoffTime time.Time) bool {
+	dirInfo, err := os.Stat(dirPath)
+	if err != nil {
+		slog.Debug("Failed to stat directory", "dir", dirPath, "error", err)
+		return false
 	}
+
+	// Check if directory is older than KeepTime
+	if !dirInfo.ModTime().Before(cutoffTime) {
+		return false
+	}
+
+	age := time.Since(dirInfo.ModTime())
+	slog.Debug("Removing old repository directory", "dir", dirPath, "age", age.Truncate(time.Minute))
+
+	if err := os.RemoveAll(dirPath); err != nil {
+		slog.Debug("Failed to remove old repository directory", "dir", dirPath, "error", err)
+		return false
+	}
+
+	return true
 }

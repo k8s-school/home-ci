@@ -10,21 +10,70 @@ import (
 	"time"
 )
 
+const (
+	// Git configuration
+	gitPager        = "cat"
+	gitUserName     = "CI Test"
+	gitUserEmail    = "ci-test@example.com"
+	defaultBranch   = "main"
+
+	// File permissions
+	filePerm = 0644
+
+	// Git log display
+	logDisplayCount = 5
+)
+
 // initializeGitRepo initializes the git repository (logic from setup-test-repo.sh)
 func (th *E2ETestHarness) initializeGitRepo() error {
-	// Set GIT_PAGER to avoid interactions
-	os.Setenv("GIT_PAGER", "cat")
+	if err := th.setupGitEnvironment(); err != nil {
+		return err
+	}
 
-	// Initialize git
+	if err := th.configureGit(); err != nil {
+		return err
+	}
+
+	if err := th.createInitialFiles(); err != nil {
+		return err
+	}
+
+	if err := th.createInitialCommit(); err != nil {
+		return err
+	}
+
+	if th.testType != TestTimeout {
+		if err := th.createTestBranches(); err != nil {
+			return err
+		}
+
+		if err := th.createMainUpdates(); err != nil {
+			return err
+		}
+
+		th.displayRepositoryState()
+	}
+
+	return nil
+}
+
+// setupGitEnvironment sets up the git environment
+func (th *E2ETestHarness) setupGitEnvironment() error {
+	os.Setenv("GIT_PAGER", gitPager)
+	return nil
+}
+
+// configureGit configures git with necessary settings
+func (th *E2ETestHarness) configureGit() error {
 	commands := [][]string{
 		{"git", "init"},
-		{"git", "config", "user.name", "CI Test"},
-		{"git", "config", "user.email", "ci-test@example.com"},
+		{"git", "config", "user.name", gitUserName},
+		{"git", "config", "user.email", gitUserEmail},
 		{"git", "config", "advice.detachedHead", "false"},
-		{"git", "config", "init.defaultBranch", "main"},
+		{"git", "config", "init.defaultBranch", defaultBranch},
 		{"git", "config", "pager.branch", "false"},
 		{"git", "config", "pager.log", "false"},
-		{"git", "config", "core.pager", "cat"},
+		{"git", "config", "core.pager", gitPager},
 	}
 
 	for _, cmd := range commands {
@@ -32,8 +81,11 @@ func (th *E2ETestHarness) initializeGitRepo() error {
 			return fmt.Errorf("failed to run git command %v: %w", cmd, err)
 		}
 	}
+	return nil
+}
 
-	// Create basic structure and files (from setup-test-repo.sh)
+// createInitialFiles creates the basic repository structure
+func (th *E2ETestHarness) createInitialFiles() error {
 	files := map[string]string{
 		"README.md":  "# Test Repository\n",
 		".gitignore": "node_modules/\n*.log\n.home-ci/\n",
@@ -42,134 +94,182 @@ func (th *E2ETestHarness) initializeGitRepo() error {
 
 	for filename, content := range files {
 		filePath := filepath.Join(th.testRepoPath, filename)
-		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(content), filePerm); err != nil {
 			return fmt.Errorf("failed to create %s: %w", filename, err)
 		}
 	}
+	return nil
+}
 
-	// First commit and rename branch to main
+// createInitialCommit creates the first commit and sets up main branch
+func (th *E2ETestHarness) createInitialCommit() error {
 	if err := th.runGitCommand("git", "add", "."); err != nil {
 		return fmt.Errorf("failed to add files: %w", err)
 	}
 	if err := th.runGitCommand("git", "commit", "-m", "Initial commit"); err != nil {
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
-	if err := th.runGitCommand("git", "branch", "-m", "main"); err != nil {
-		return fmt.Errorf("failed to rename branch to main: %w", err)
+	if err := th.runGitCommand("git", "branch", "-m", defaultBranch); err != nil {
+		return fmt.Errorf("failed to rename branch to %s: %w", defaultBranch, err)
 	}
-
-	// Create test branches with commits (from setup-test-repo.sh logic)
-	if th.testType != TestTimeout { // Don't create extra branches for timeout test
-		branches := []struct {
-			name    string
-			files   map[string]string
-			commits []string
-		}{
-			{
-				name: "feature/test1",
-				files: map[string]string{
-					"feature1.txt": "Feature 1 content\n",
-				},
-				commits: []string{"Add feature 1", "Update feature 1"},
-			},
-			{
-				name: "feature/test2",
-				files: map[string]string{
-					"feature2.txt": "Feature 2 content\n",
-				},
-				commits: []string{"Add feature 2"},
-			},
-			{
-				name: "bugfix/critical",
-				files: map[string]string{
-					"bugfix.txt": "Bug fix content\n",
-				},
-				commits: []string{"Fix critical bug"},
-			},
-		}
-
-		for _, branch := range branches {
-			if err := th.runGitCommand("git", "checkout", "-b", branch.name); err != nil {
-				return fmt.Errorf("failed to create branch %s: %w", branch.name, err)
-			}
-
-			for filename, content := range branch.files {
-				filePath := filepath.Join(th.testRepoPath, filename)
-				if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-					return fmt.Errorf("failed to create %s: %w", filename, err)
-				}
-				if err := th.runGitCommand("git", "add", filename); err != nil {
-					return fmt.Errorf("failed to add %s: %w", filename, err)
-				}
-			}
-
-			for _, commitMsg := range branch.commits {
-				if err := th.runGitCommand("git", "commit", "-m", commitMsg); err != nil {
-					return fmt.Errorf("failed to commit %s: %w", commitMsg, err)
-				}
-				if len(branch.commits) > 1 {
-					// Update file for next commit
-					for filename := range branch.files {
-						filePath := filepath.Join(th.testRepoPath, filename)
-						if err := os.WriteFile(filePath, []byte(branch.files[filename]+"Updated\n"), 0644); err != nil {
-							return fmt.Errorf("failed to update %s: %w", filename, err)
-						}
-						if err := th.runGitCommand("git", "add", filename); err != nil {
-							return fmt.Errorf("failed to add updated %s: %w", filename, err)
-						}
-					}
-				}
-			}
-		}
-
-		// Return to main and make some commits
-		if err := th.runGitCommand("git", "checkout", "main"); err != nil {
-			return fmt.Errorf("failed to checkout main: %w", err)
-		}
-
-		mainUpdates := []string{"Main update 1", "Main update 2"}
-		for i, update := range mainUpdates {
-			filename := "main-update.txt"
-			filePath := filepath.Join(th.testRepoPath, filename)
-			content := fmt.Sprintf("%s\n", update)
-			if i > 0 {
-				// Append to existing file
-				existingContent, _ := os.ReadFile(filePath)
-				content = string(existingContent) + content
-			}
-			if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-				return fmt.Errorf("failed to create %s: %w", filename, err)
-			}
-			if err := th.runGitCommand("git", "add", filename); err != nil {
-				return fmt.Errorf("failed to add %s: %w", filename, err)
-			}
-			if err := th.runGitCommand("git", "commit", "-m", update); err != nil {
-				return fmt.Errorf("failed to commit %s: %w", update, err)
-			}
-		}
-	}
-
-	// Display final state (like setup-test-repo.sh) - skip for timeout tests to reduce verbosity
-	if th.testType != TestTimeout {
-		log.Println("Available branches:")
-		if output, err := th.runGitCommandWithOutput("git", "branch", "-a"); err == nil {
-			log.Println(output)
-		}
-
-		log.Println("Recent commits on main:")
-		if output, err := th.runGitCommandWithOutput("git", "log", "--oneline", "-5"); err == nil {
-			log.Println(output)
-		}
-	}
-
 	return nil
+}
+
+// BranchConfig represents a branch configuration for testing
+type BranchConfig struct {
+	name    string
+	files   map[string]string
+	commits []string
+}
+
+// createTestBranches creates test branches with commits
+func (th *E2ETestHarness) createTestBranches() error {
+	branches := []BranchConfig{
+		{
+			name: "feature/test1",
+			files: map[string]string{
+				"feature1.txt": "Feature 1 content\n",
+			},
+			commits: []string{"Add feature 1", "Update feature 1"},
+		},
+		{
+			name: "feature/test2",
+			files: map[string]string{
+				"feature2.txt": "Feature 2 content\n",
+			},
+			commits: []string{"Add feature 2"},
+		},
+		{
+			name: "bugfix/critical",
+			files: map[string]string{
+				"bugfix.txt": "Bug fix content\n",
+			},
+			commits: []string{"Fix critical bug"},
+		},
+	}
+
+	for _, branch := range branches {
+		if err := th.createBranchWithCommits(branch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// createBranchWithCommits creates a single branch with its commits
+func (th *E2ETestHarness) createBranchWithCommits(branch BranchConfig) error {
+	if err := th.runGitCommand("git", "checkout", "-b", branch.name); err != nil {
+		return fmt.Errorf("failed to create branch %s: %w", branch.name, err)
+	}
+
+	if err := th.createBranchFiles(branch.files); err != nil {
+		return err
+	}
+
+	return th.createBranchCommits(branch)
+}
+
+// createBranchFiles creates files for a branch
+func (th *E2ETestHarness) createBranchFiles(files map[string]string) error {
+	for filename, content := range files {
+		filePath := filepath.Join(th.testRepoPath, filename)
+		if err := os.WriteFile(filePath, []byte(content), filePerm); err != nil {
+			return fmt.Errorf("failed to create %s: %w", filename, err)
+		}
+		if err := th.runGitCommand("git", "add", filename); err != nil {
+			return fmt.Errorf("failed to add %s: %w", filename, err)
+		}
+	}
+	return nil
+}
+
+// createBranchCommits creates commits for a branch
+func (th *E2ETestHarness) createBranchCommits(branch BranchConfig) error {
+	for _, commitMsg := range branch.commits {
+		if err := th.runGitCommand("git", "commit", "-m", commitMsg); err != nil {
+			return fmt.Errorf("failed to commit %s: %w", commitMsg, err)
+		}
+		if len(branch.commits) > 1 {
+			if err := th.updateBranchFiles(branch.files); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// updateBranchFiles updates files for next commit
+func (th *E2ETestHarness) updateBranchFiles(files map[string]string) error {
+	for filename := range files {
+		filePath := filepath.Join(th.testRepoPath, filename)
+		if err := os.WriteFile(filePath, []byte(files[filename]+"Updated\n"), filePerm); err != nil {
+			return fmt.Errorf("failed to update %s: %w", filename, err)
+		}
+		if err := th.runGitCommand("git", "add", filename); err != nil {
+			return fmt.Errorf("failed to add updated %s: %w", filename, err)
+		}
+	}
+	return nil
+}
+
+// createMainUpdates creates commits on the main branch
+func (th *E2ETestHarness) createMainUpdates() error {
+	if err := th.runGitCommand("git", "checkout", defaultBranch); err != nil {
+		return fmt.Errorf("failed to checkout %s: %w", defaultBranch, err)
+	}
+
+	mainUpdates := []string{"Main update 1", "Main update 2"}
+	for i, update := range mainUpdates {
+		if err := th.createMainUpdate(update, i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// createMainUpdate creates a single update on main branch
+func (th *E2ETestHarness) createMainUpdate(update string, index int) error {
+	filename := "main-update.txt"
+	filePath := filepath.Join(th.testRepoPath, filename)
+	content := fmt.Sprintf("%s\n", update)
+
+	if index > 0 {
+		// Append to existing file
+		existingContent, _ := os.ReadFile(filePath)
+		content = string(existingContent) + content
+	}
+
+	if err := os.WriteFile(filePath, []byte(content), filePerm); err != nil {
+		return fmt.Errorf("failed to create %s: %w", filename, err)
+	}
+	if err := th.runGitCommand("git", "add", filename); err != nil {
+		return fmt.Errorf("failed to add %s: %w", filename, err)
+	}
+	if err := th.runGitCommand("git", "commit", "-m", update); err != nil {
+		return fmt.Errorf("failed to commit %s: %w", update, err)
+	}
+	return nil
+}
+
+// displayRepositoryState shows the current repository state
+func (th *E2ETestHarness) displayRepositoryState() {
+	log.Println("Available branches:")
+	if output, err := th.runGitCommandWithOutput("git", "branch", "-a"); err == nil {
+		log.Println(output)
+	}
+
+	log.Println("Recent commits on main:")
+	logArgs := []string{"git", "log", "--oneline", fmt.Sprintf("-%d", logDisplayCount)}
+	if output, err := th.runGitCommandWithOutput(logArgs...); err == nil {
+		log.Println(output)
+	}
 }
 
 // runGitCommand executes a git command in the test repository
 func (th *E2ETestHarness) runGitCommand(args ...string) error {
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = th.testRepoPath
-	cmd.Env = append(os.Environ(), "GIT_PAGER=cat")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("GIT_PAGER=%s", gitPager))
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -183,7 +283,7 @@ func (th *E2ETestHarness) runGitCommand(args ...string) error {
 func (th *E2ETestHarness) runGitCommandWithOutput(args ...string) (string, error) {
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = th.testRepoPath
-	cmd.Env = append(os.Environ(), "GIT_PAGER=cat")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("GIT_PAGER=%s", gitPager))
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -219,7 +319,7 @@ func (th *E2ETestHarness) createCommit(branch string) error {
 	filePath := filepath.Join(th.testRepoPath, filename)
 	content := fmt.Sprintf("Content for %s at %s\n", branch, time.Now().Format(time.RFC3339))
 
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(content), filePerm); err != nil {
 		return fmt.Errorf("failed to create file %s: %w", filename, err)
 	}
 
