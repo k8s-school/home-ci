@@ -2,7 +2,7 @@ name: Repository Dispatch Test
 
 on:
   repository_dispatch:
-    types: [test-home-ci, test-home-ci-artifacts, test-home-ci-with-artifacts]
+    types: [test-home-ci-with-artifacts]
 
 jobs:
   test:

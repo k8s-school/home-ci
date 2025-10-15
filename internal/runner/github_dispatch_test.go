@@ -1,10 +1,6 @@
 package runner
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,125 +66,6 @@ func TestLoadGitHubToken(t *testing.T) {
 	}
 }
 
-func TestSendGitHubDispatch(t *testing.T) {
-	// Create test server
-	var receivedPayload GitHubDispatchPayload
-	var receivedHeaders map[string]string
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Capture headers
-		receivedHeaders = make(map[string]string)
-		receivedHeaders["Authorization"] = r.Header.Get("Authorization")
-		receivedHeaders["Accept"] = r.Header.Get("Accept")
-		receivedHeaders["X-GitHub-Api-Version"] = r.Header.Get("X-GitHub-Api-Version")
-		receivedHeaders["Content-Type"] = r.Header.Get("Content-Type")
-
-		// Decode payload
-		err := json.NewDecoder(r.Body).Decode(&receivedPayload)
-		if err != nil {
-			t.Errorf("Failed to decode request body: %v", err)
-		}
-
-		// Return success
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
-
-	// Test with server URL - we'll call sendGitHubDispatch directly
-	testSendGitHubDispatch := func(repoOwner, repoName, token, eventType string, clientPayload map[string]interface{}, inputs map[string]interface{}) error {
-		url := server.URL + "/dispatches"
-
-		payload := GitHubDispatchPayload{
-			EventType:     eventType,
-			ClientPayload: clientPayload,
-			Inputs:        inputs,
-		}
-
-		jsonData, err := json.Marshal(payload)
-		if err != nil {
-			return fmt.Errorf("failed to marshal payload: %w", err)
-		}
-
-		req, err := http.NewRequest("POST", url, strings.NewReader(string(jsonData)))
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-
-		req.Header.Set("Accept", "application/vnd.github+json")
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			return fmt.Errorf("failed to send request: %w", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusNoContent {
-			return fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
-		}
-
-		return nil
-	}
-
-	// Test data
-	repoOwner := "testowner"
-	repoName := "testrepo"
-	token := "test_token_123"
-	eventType := "test-home-ci-with-artifacts"
-	clientPayload := map[string]interface{}{
-		"branch":  "main",
-		"commit":  "abc123",
-		"success": true,
-	}
-
-	// Test inputs (empty now)
-	inputs := map[string]interface{}{}
-
-	// Call function
-	err := testSendGitHubDispatch(repoOwner, repoName, token, eventType, clientPayload, inputs)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-
-	// Verify headers
-	expectedHeaders := map[string]string{
-		"Authorization":        "Bearer " + token,
-		"Accept":               "application/vnd.github+json",
-		"X-GitHub-Api-Version": "2022-11-28",
-		"Content-Type":         "application/json",
-	}
-
-	for key, expected := range expectedHeaders {
-		if receivedHeaders[key] != expected {
-			t.Errorf("Header %s: expected %s, got %s", key, expected, receivedHeaders[key])
-		}
-	}
-
-	// Verify payload
-	if receivedPayload.EventType != eventType {
-		t.Errorf("EventType: expected %s, got %s", eventType, receivedPayload.EventType)
-	}
-
-	if receivedPayload.ClientPayload["branch"] != "main" {
-		t.Errorf("ClientPayload.branch: expected main, got %v", receivedPayload.ClientPayload["branch"])
-	}
-
-	if receivedPayload.ClientPayload["commit"] != "abc123" {
-		t.Errorf("ClientPayload.commit: expected abc123, got %v", receivedPayload.ClientPayload["commit"])
-	}
-
-	if receivedPayload.ClientPayload["success"] != true {
-		t.Errorf("ClientPayload.success: expected true, got %v", receivedPayload.ClientPayload["success"])
-	}
-
-	// Verify inputs are empty
-	if len(receivedPayload.Inputs) != 0 {
-		t.Errorf("Inputs should be empty, got %v", receivedPayload.Inputs)
-	}
-}
 
 func TestIntegrationNotifyGitHubActionsValidation(t *testing.T) {
 	// This test validates the notifyGitHubActions function with real dispatch including artifacts
