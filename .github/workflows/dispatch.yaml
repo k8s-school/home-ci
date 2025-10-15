@@ -23,6 +23,46 @@ jobs:
           echo "Artifacts received:"
           echo "${{ toJson(github.event.client_payload.artifacts) }}"
 
+      - name: Extract and upload artifacts
+        if: github.event.client_payload.artifacts
+        run: |
+          mkdir -p artifacts
+
+          # Extract log file if present
+          if echo '${{ toJson(github.event.client_payload.artifacts) }}' | jq -e 'to_entries[] | select(.value.type == "log")' > /dev/null; then
+            for artifact in $(echo '${{ toJson(github.event.client_payload.artifacts) }}' | jq -r 'to_entries[] | select(.value.type == "log") | "\(.key):\(.value.content)"'); do
+              filename=$(echo $artifact | cut -d: -f1)
+              content=$(echo $artifact | cut -d: -f2-)
+              echo "$content" | base64 -d > "artifacts/$filename"
+              echo "Extracted: $filename"
+            done
+          fi
+
+          # Extract result file if present
+          if echo '${{ toJson(github.event.client_payload.artifacts) }}' | jq -e 'to_entries[] | select(.value.type == "result")' > /dev/null; then
+            for artifact in $(echo '${{ toJson(github.event.client_payload.artifacts) }}' | jq -r 'to_entries[] | select(.value.type == "result") | "\(.key):\(.value.content)"'); do
+              filename=$(echo $artifact | cut -d: -f1)
+              content=$(echo $artifact | cut -d: -f2-)
+              echo "$content" | base64 -d > "artifacts/$filename"
+              echo "Extracted: $filename"
+            done
+          fi
+
+          # Save metadata
+          if echo '${{ toJson(github.event.client_payload.artifacts) }}' | jq -e '.metadata' > /dev/null; then
+            echo '${{ toJson(github.event.client_payload.artifacts.metadata) }}' > artifacts/metadata.json
+            echo "Extracted: metadata.json"
+          fi
+
+          ls -la artifacts/
+
+      - name: Upload artifacts to GitHub Actions
+        if: github.event.client_payload.artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-ci-dispatch-artifacts
+          path: artifacts/
+
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
