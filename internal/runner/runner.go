@@ -328,7 +328,7 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 	// GitHub Actions notification (if enabled)
 	if tr.config.GitHubActionsDispatch.Enabled {
 		testResult.GitHubActionsNotified = true
-		if notifyErr := tr.notifyGitHubActions(branch, commit, testResult.Success); notifyErr != nil {
+		if notifyErr := tr.notifyGitHubActions(branch, commit, testResult.Success, logFilePath, resultFilePath); notifyErr != nil {
 			testResult.GitHubActionsSuccess = false
 			testResult.GitHubActionsErrorMessage = notifyErr.Error()
 			slog.Debug("GitHub Actions notification failed", "branch", branch, "commit", commit[:8], "error", notifyErr)

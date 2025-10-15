@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 type GitHubDispatchPayload struct {
 	EventType     string                 `json:"event_type"`
 	ClientPayload map[string]interface{} `json:"client_payload"`
+	Inputs        map[string]interface{} `json:"inputs,omitempty"`
 }
 
 // SecretFile represents the structure of secret.yaml
@@ -54,12 +56,13 @@ func loadGitHubToken(secretFile string) (string, error) {
 }
 
 // sendGitHubDispatch sends a repository dispatch event to GitHub
-func sendGitHubDispatch(repoOwner, repoName, token, eventType string, clientPayload map[string]interface{}) error {
+func sendGitHubDispatch(repoOwner, repoName, token, eventType string, clientPayload map[string]interface{}, inputs map[string]interface{}) error {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/dispatches", repoOwner, repoName)
 
 	payload := GitHubDispatchPayload{
 		EventType:     eventType,
 		ClientPayload: clientPayload,
+		Inputs:        inputs,
 	}
 
 	jsonData, err := json.Marshal(payload)
@@ -92,8 +95,17 @@ func sendGitHubDispatch(repoOwner, repoName, token, eventType string, clientPayl
 	return nil
 }
 
+// readFileAsBase64 reads a file and returns its content as base64 encoded string
+func readFileAsBase64(filePath string) (string, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
+}
+
 // notifyGitHubActions sends a notification to GitHub Actions via repository dispatch
-func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool) error {
+func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool, logFilePath, resultFilePath string) error {
 	config := tr.config.GitHubActionsDispatch
 
 	// Parse repository owner and name from github_repo config first
@@ -120,13 +132,42 @@ func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool) e
 		}
 	}
 
-	// Create client payload similar to the shell script
+	// Create client payload with artifacts
 	clientPayload := map[string]interface{}{
 		"branch":    branch,
 		"commit":    commit,
 		"success":   success,
 		"timestamp": fmt.Sprintf("%d", os.Getuid()), // Simple timestamp-like value
 		"source":    "home-ci",
+		"artifacts": map[string]interface{}{},
+	}
+
+	// Add log file as artifact if it exists
+	if logFilePath != "" {
+		if logContent, err := readFileAsBase64(logFilePath); err == nil {
+			logFileName := filepath.Base(logFilePath)
+			clientPayload["artifacts"].(map[string]interface{})[logFileName] = map[string]interface{}{
+				"content": logContent,
+				"type":    "log",
+			}
+			slog.Debug("Added log file to dispatch payload", "file", logFileName, "size", len(logContent))
+		} else {
+			slog.Debug("Failed to read log file for dispatch", "file", logFilePath, "error", err)
+		}
+	}
+
+	// Add result JSON file as artifact if it exists
+	if resultFilePath != "" {
+		if resultContent, err := readFileAsBase64(resultFilePath); err == nil {
+			resultFileName := filepath.Base(resultFilePath)
+			clientPayload["artifacts"].(map[string]interface{})[resultFileName] = map[string]interface{}{
+				"content": resultContent,
+				"type":    "result",
+			}
+			slog.Debug("Added result file to dispatch payload", "file", resultFileName, "size", len(resultContent))
+		} else {
+			slog.Debug("Failed to read result file for dispatch", "file", resultFilePath, "error", err)
+		}
 	}
 
 	slog.Debug("Sending GitHub Actions dispatch",
@@ -136,7 +177,18 @@ func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool) e
 		"commit", commit[:8],
 		"success", success)
 
-	err = sendGitHubDispatch(repoOwner, repoName, token, eventType, clientPayload)
+	// Add metadata to artifacts
+	clientPayload["artifacts"].(map[string]interface{})["metadata"] = map[string]interface{}{
+		"branch":  branch,
+		"commit":  commit,
+		"success": success,
+		"type":    "metadata",
+	}
+
+	// Create empty inputs for GitHub Actions GUI
+	inputs := map[string]interface{}{}
+
+	err = sendGitHubDispatch(repoOwner, repoName, token, eventType, clientPayload, inputs)
 	if err != nil {
 		return fmt.Errorf("failed to send GitHub dispatch: %w", err)
 	}

@@ -95,12 +95,13 @@ func TestSendGitHubDispatch(t *testing.T) {
 	defer server.Close()
 
 	// Test with server URL - we'll call sendGitHubDispatch directly
-	testSendGitHubDispatch := func(repoOwner, repoName, token, eventType string, clientPayload map[string]interface{}) error {
+	testSendGitHubDispatch := func(repoOwner, repoName, token, eventType string, clientPayload map[string]interface{}, inputs map[string]interface{}) error {
 		url := server.URL + "/dispatches"
 
 		payload := GitHubDispatchPayload{
 			EventType:     eventType,
 			ClientPayload: clientPayload,
+			Inputs:        inputs,
 		}
 
 		jsonData, err := json.Marshal(payload)
@@ -143,8 +144,11 @@ func TestSendGitHubDispatch(t *testing.T) {
 		"success": true,
 	}
 
+	// Test inputs (empty now)
+	inputs := map[string]interface{}{}
+
 	// Call function
-	err := testSendGitHubDispatch(repoOwner, repoName, token, eventType, clientPayload)
+	err := testSendGitHubDispatch(repoOwner, repoName, token, eventType, clientPayload, inputs)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -179,6 +183,68 @@ func TestSendGitHubDispatch(t *testing.T) {
 	if receivedPayload.ClientPayload["success"] != true {
 		t.Errorf("ClientPayload.success: expected true, got %v", receivedPayload.ClientPayload["success"])
 	}
+
+	// Verify inputs are empty
+	if len(receivedPayload.Inputs) != 0 {
+		t.Errorf("Inputs should be empty, got %v", receivedPayload.Inputs)
+	}
+}
+
+func TestIntegrationGitHubDispatchWithArtifacts(t *testing.T) {
+	// This test sends a real dispatch to GitHub Actions if secret.yaml exists
+	secretPath := "../../secret.yaml"
+	if _, err := os.Stat(secretPath); os.IsNotExist(err) {
+		t.Skip("Skipping GitHub dispatch integration test: secret.yaml not found")
+	}
+
+	// Load the real GitHub token
+	token, err := loadGitHubToken(secretPath)
+	if err != nil {
+		t.Fatalf("Failed to load GitHub token from real secret.yaml: %v", err)
+	}
+
+	// Use real repository data
+	repoOwner := "k8s-school"
+	repoName := "home-ci"
+	eventType := "test-home-ci-artifacts"
+
+	// Create client payload with artifacts
+	clientPayload := map[string]interface{}{
+		"branch":    "feature/test",
+		"commit":    "def456",
+		"success":   false,
+		"timestamp": "1697374800",
+		"source":    "home-ci",
+		"artifacts": map[string]interface{}{
+			"test.log": map[string]interface{}{
+				"content": "VGVzdCBsb2cgY29udGVudA==", // base64 of "Test log content"
+				"type":    "log",
+			},
+			"result.json": map[string]interface{}{
+				"content": "eyJ0ZXN0cyI6IDUsICJmYWlsZWQiOiAyfQ==", // base64 of {"tests": 5, "failed": 2}
+				"type":    "result",
+			},
+			"metadata": map[string]interface{}{
+				"branch":  "feature/test",
+				"commit":  "def456",
+				"success": false,
+				"type":    "metadata",
+			},
+		},
+	}
+
+	inputs := map[string]interface{}{}
+
+	// Send real dispatch to GitHub Actions
+	err = sendGitHubDispatch(repoOwner, repoName, token, eventType, clientPayload, inputs)
+	if err != nil {
+		t.Fatalf("Failed to send GitHub dispatch with artifacts: %v", err)
+	}
+
+	t.Logf("Successfully sent GitHub dispatch with artifacts to %s/%s", repoOwner, repoName)
+	t.Logf("Event type: %s", eventType)
+	t.Logf("Artifacts included: test.log, result.json, metadata")
+	t.Logf("Check GitHub Actions tab for the dispatch event")
 }
 
 func TestNotifyGitHubActionsValidation(t *testing.T) {
@@ -193,7 +259,7 @@ func TestNotifyGitHubActionsValidation(t *testing.T) {
 	}
 
 	tr := &TestRunner{config: *cfg}
-	err := tr.notifyGitHubActions("main", "abcdef123456", true)
+	err := tr.notifyGitHubActions("main", "abcdef123456", true, "", "")
 	if err == nil {
 		t.Error("Expected error for invalid repo format, got nil")
 	}
@@ -205,13 +271,13 @@ func TestNotifyGitHubActionsValidation(t *testing.T) {
 	cfg.GitHubActionsDispatch.GitHubRepo = "k8s-school/home-ci"
 	cfg.GitHubActionsDispatch.GitHubTokenFile = "nonexistent.yaml"
 	tr.config = *cfg
-	err = tr.notifyGitHubActions("main", "abcdef123456", true)
+	err = tr.notifyGitHubActions("main", "abcdef123456", true, "", "")
 	if err == nil {
 		t.Error("Expected error for nonexistent secret file, got nil")
 	}
 }
 
-func TestIntegrationWithRealSecret(t *testing.T) {
+func TestIntegrationLoadGitHubToken(t *testing.T) {
 	// This test reads the actual secret.yaml file if it exists
 	secretPath := "../../secret.yaml"
 	if _, err := os.Stat(secretPath); os.IsNotExist(err) {

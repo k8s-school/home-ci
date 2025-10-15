@@ -11,34 +11,67 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// createConfigFile creates configuration file from embedded resource
-func (th *E2ETestHarness) createConfigFile() (string, error) {
-	// Place config file in the run's temp directory
-	configPath := filepath.Join(th.tempRunDir, "home-ci-config.yaml")
+// writeConfigFile writes a specific config file to /tmp/home-ci/e2e/
+func (th *E2ETestHarness) writeConfigFile(configType, fileName, content string) error {
+	configPath := filepath.Join("/tmp/home-ci/e2e", fileName)
 
-	var configContent string
-	if th.testType == TestTimeout {
-		configContent = resources.ConfigTimeout
-		// Replace repo path in timeout config
-		configContent = strings.ReplaceAll(configContent, "/tmp/test-repo-timeout", th.testRepoPath)
-	} else if th.testType == TestDispatch {
-		configContent = resources.ConfigDispatch
-		// Replace repo path in dispatch config
-		configContent = strings.ReplaceAll(configContent, "/tmp/test-repo-home-ci", th.testRepoPath)
-	} else {
-		configContent = resources.ConfigNormal
-		// Replace repo path in normal config
-		configContent = strings.ReplaceAll(configContent, "/tmp/test-repo-home-ci", th.testRepoPath)
-	}
-
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		return "", fmt.Errorf("failed to create config file: %w", err)
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to create %s config file: %w", configType, err)
 	}
 
 	if th.testType != TestTimeout {
-		log.Printf("✅ Configuration file created at %s", configPath)
+		log.Printf("✅ %s configuration file created at %s", configType, configPath)
 	}
+	return nil
+}
+
+// createConfigFile creates configuration file from embedded resource for current test type
+func (th *E2ETestHarness) createConfigFile() (string, error) {
+	var configFileName string
+	var configContent string
+	var configType string
+
+	if th.testType == TestTimeout {
+		configFileName = "config-timeout.yaml"
+		configContent = resources.ConfigTimeout
+		configType = "Timeout"
+	} else if th.testType == TestDispatch {
+		configFileName = "config-dispatch.yaml"
+		configContent = resources.ConfigDispatch
+		configType = "Dispatch"
+	} else {
+		configFileName = "config-normal.yaml"
+		configContent = resources.ConfigNormal
+		configType = "Normal"
+	}
+
+	if err := th.writeConfigFile(configType, configFileName, configContent); err != nil {
+		return "", err
+	}
+
+	configPath := filepath.Join("/tmp/home-ci/e2e", configFileName)
 	return configPath, nil
+}
+
+// createAllConfigFiles creates all configuration files for init command
+func (th *E2ETestHarness) createAllConfigFiles() error {
+	configTypes := []struct {
+		name     string
+		fileName string
+		content  string
+	}{
+		{"Normal", "config-normal.yaml", resources.ConfigNormal},
+		{"Timeout", "config-timeout.yaml", resources.ConfigTimeout},
+		{"Dispatch", "config-dispatch.yaml", resources.ConfigDispatch},
+	}
+
+	for _, config := range configTypes {
+		if err := th.writeConfigFile(config.name, config.fileName, config.content); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // loadTestExpectations loads the test expectations configuration

@@ -1,4 +1,4 @@
-repo_path: "/tmp/test-repo-home-ci"
+repo_path: "/tmp/home-ci/e2e/repo"
 check_interval: 30s
 test_script: "e2e/run-e2e.sh"
 options: "-c -i ztf"

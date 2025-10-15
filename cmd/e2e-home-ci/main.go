@@ -15,7 +15,7 @@ func main() {
 		testTypeFlag  = flag.String("type", "normal", "Test type: normal, timeout, quick, long, dispatch")
 		durationFlag  = flag.String("duration", "3m", "Test duration (e.g., 30s, 5m, 1h)")
 		noCleanupFlag = flag.Bool("no-cleanup", false, "Keep test repositories for debugging")
-		setupGitFlag  = flag.Bool("setup-git", false, "Only create the git repository and exit")
+		initFlag      = flag.Bool("init", false, "Initialize e2e environment (create git repository and config files) and exit")
 		helpFlag      = flag.Bool("help", false, "Show help")
 	)
 	flag.Parse()
@@ -40,7 +40,7 @@ func main() {
 		fmt.Println("  e2e-home-ci -type=normal -duration=5m")
 		fmt.Println("  e2e-home-ci -type=timeout")
 		fmt.Println("  e2e-home-ci -type=quick")
-		fmt.Println("  e2e-home-ci -setup-git                # Create git repo only")
+		fmt.Println("  e2e-home-ci -init                      # Initialize e2e environment")
 		fmt.Println("  e2e-home-ci -type=timeout -no-cleanup  # Keep repos for debugging")
 		return
 	}
@@ -85,10 +85,21 @@ func main() {
 		log.Fatalf("❌ Failed to setup test repository: %v", err)
 	}
 
-	// If setup-git flag is set, only create the repository and exit
-	if *setupGitFlag {
-		log.Println("✅ Git repository setup completed!")
+	// If init flag is set, create repository and config files, then exit
+	if *initFlag {
+		log.Println("🧹 Cleaning /tmp/home-ci/repos directory...")
+		if err := th.cleanupReposDirectory(); err != nil {
+			log.Printf("⚠️  Warning: Failed to clean repos directory: %v", err)
+		}
+
+		log.Println("✅ Creating all configuration files...")
+		if err := th.createAllConfigFiles(); err != nil {
+			log.Fatalf("❌ Failed to create config files: %v", err)
+		}
+		log.Println("✅ E2E environment initialization completed!")
 		log.Printf("📁 Repository created at: %s", th.testRepoPath)
+		log.Printf("⚙️  Config files created in: /tmp/home-ci/e2e/")
+		log.Printf("🧹 Cleaned /tmp/home-ci/repos directory")
 		log.Printf("🔍 To explore the repository:")
 		log.Printf("   cd %s", th.testRepoPath)
 		log.Printf("   git log --oneline --all --graph")

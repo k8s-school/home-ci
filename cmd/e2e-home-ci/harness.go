@@ -16,9 +16,8 @@ import (
 )
 
 func NewE2ETestHarness(testType TestType, duration time.Duration, noCleanup bool) *E2ETestHarness {
-	// Create unique temporary directory for this run
-	timestamp := time.Now().Format("20060102-150405")
-	tempRunDir := fmt.Sprintf("/tmp/home-ci/e2e/repo-%s", timestamp)
+	// Use a fixed directory name for simplicity
+	tempRunDir := "/tmp/home-ci/e2e/repo"
 
 	// Use the temp run directory directly as the repository path
 	repoPath := tempRunDir
@@ -403,6 +402,28 @@ func (th *E2ETestHarness) determineExpectedBehavior(branch, commit string) strin
 		}
 		return "success" // Default
 	}
+}
+
+// cleanupReposDirectory removes all directories from /tmp/home-ci/repos
+func (th *E2ETestHarness) cleanupReposDirectory() error {
+	reposDir := "/tmp/home-ci/repos"
+
+	// Check if the directory exists
+	if _, err := os.Stat(reposDir); os.IsNotExist(err) {
+		return nil // Nothing to clean up
+	}
+
+	// Remove the entire repos directory and recreate it
+	if err := os.RemoveAll(reposDir); err != nil {
+		return fmt.Errorf("failed to remove repos directory: %w", err)
+	}
+
+	// Recreate the empty directory
+	if err := os.MkdirAll(reposDir, 0755); err != nil {
+		return fmt.Errorf("failed to recreate repos directory: %w", err)
+	}
+
+	return nil
 }
 
 // getTestTypeName returns a human-readable test type name

@@ -31,6 +31,9 @@ RESULT_FILE="$DATA_DIR/${BRANCH_SAFE}-${COMMIT_HASH}_run-product.json"
 # Ensure data directory exists
 mkdir -p "$DATA_DIR"
 
+# Ensure the result file's directory exists
+mkdir -p "$(dirname "$RESULT_FILE")"
+
 echo "=== E2E Test Suite ==="
 echo "Branch: $BRANCH_NAME | Commit: $COMMIT_HASH"
 echo "Message: $COMMIT_MESSAGE"

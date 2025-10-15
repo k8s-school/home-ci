@@ -1,4 +1,4 @@
-repo_path: "/tmp/test-repo-timeout"
+repo_path: "/tmp/home-ci/e2e/repo"
 check_interval: 10s
 test_script: "e2e/run-e2e.sh"
 options: "--timeout-test"
