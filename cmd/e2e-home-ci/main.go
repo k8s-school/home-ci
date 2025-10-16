@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -176,10 +173,6 @@ func main() {
 		success = th.totalTestsDetected > 0
 	}
 
-	// Show post-test information for dispatch tests
-	if testType == TestDispatchAll {
-		showDispatchTestResults(th)
-	}
 
 	if success {
 		log.Println("🎉 Test harness completed successfully!")
@@ -189,53 +182,3 @@ func main() {
 	}
 }
 
-// showDispatchTestResults displays git branches and processed commits for dispatch tests
-func showDispatchTestResults(th *E2ETestHarness) {
-	log.Println("")
-	log.Println("📊 Git branches from test repository:")
-
-	// Show git branches
-	repoPath := th.testRepoPath
-	if _, err := os.Stat(repoPath); err == nil {
-		cmd := exec.Command("git", "branch", "-a")
-		cmd.Dir = repoPath
-		if output, err := cmd.Output(); err == nil {
-			log.Printf("%s", output)
-		} else {
-			log.Println("No branches found")
-		}
-	} else {
-		log.Println("Repository not found")
-	}
-
-	log.Println("")
-	log.Println("📋 Processed commits (JSON results):")
-
-	// Show processed commits from JSON files
-	homeciDir := filepath.Join(repoPath, ".home-ci")
-	if files, err := filepath.Glob(filepath.Join(homeciDir, "*.json")); err == nil {
-		var commits []string
-		for _, file := range files {
-			if filepath.Base(file) != "state.json" {
-				// Extract branch and commit from filename like "20251016-192533_bugfix-timeout_a24b54c3.json"
-				basename := filepath.Base(file)
-				basename = strings.TrimSuffix(basename, ".json")
-				parts := strings.Split(basename, "_")
-				if len(parts) >= 3 {
-					branch := parts[1]
-					commit := parts[2]
-					commits = append(commits, fmt.Sprintf("%s-%s", branch, commit))
-				}
-			}
-		}
-		if len(commits) > 0 {
-			for _, commit := range commits {
-				log.Println(commit)
-			}
-		} else {
-			log.Println("No results found")
-		}
-	} else {
-		log.Println("No results found")
-	}
-}

@@ -1,4 +1,4 @@
-.PHONY: build build-e2e test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-no-token-file test-dispatch-all test-quick test-normal test-long clean clean-all help
+.PHONY: build build-e2e build-diag test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-no-token-file test-dispatch-all test-quick test-normal test-long clean clean-all help
 
 # Default target
 help:
@@ -6,9 +6,10 @@ help:
 	@echo "==============================="
 	@echo ""
 	@echo "Build targets:"
-	@echo "  build               Build everything (home-ci + e2e test harness)"
+	@echo "  build               Build everything (home-ci + e2e test harness + diagnostics tool)"
 	@echo "  build-home-ci       Build the home-ci binary"
 	@echo "  build-e2e           Build the e2e test harness"
+	@echo "  build-diag          Build the diagnostics tool"
 	@echo "  clean               Clean build artifacts"
 	@echo ""
 	@echo "Test targets:"
@@ -30,7 +31,7 @@ help:
 	@echo "  make test-timeout      # Timeout validation"
 
 # Build everything
-build: build-home-ci build-e2e
+build: build-home-ci build-e2e build-diag
 
 # Build the main binary
 build-home-ci:
@@ -43,6 +44,12 @@ build-e2e:
 	@echo "🏗️  Building e2e test harness..."
 	go build -o e2e-home-ci ./cmd/e2e-home-ci
 	@echo "✅ Build complete: ./e2e-home-ci"
+
+# Build the diagnostics tool
+build-diag:
+	@echo "🏗️  Building diagnostics tool..."
+	go build -o home-ci-diag ./cmd/home-ci-diag
+	@echo "✅ Build complete: ./home-ci-diag"
 
 # Run integration tests (default duration)
 test: build
@@ -78,6 +85,9 @@ test-dispatch-no-token-file: build
 test-dispatch-all: build
 	@echo "🚀 Running multi commit dispatch test..."
 	./e2e-home-ci -type=dispatch-all
+	@echo ""
+	@echo "🔍 Repository diagnostic:"
+	./home-ci-diag -repo=/tmp/home-ci/e2e/dispatch-all/repo
 
 # Run quick tests (4 commits)
 test-quick: build
@@ -99,6 +109,7 @@ clean:
 	@echo "🧹 Cleaning build artifacts..."
 	rm -f home-ci
 	rm -f e2e-home-ci
+	rm -f home-ci-diag
 	@echo "✅ Clean complete"
 	@echo "💾 Test data preserved in /tmp/home-ci/e2e/*/data/"
 
@@ -107,6 +118,7 @@ clean-all:
 	@echo "🧹 Cleaning all build artifacts and test environments..."
 	rm -f home-ci
 	rm -f e2e-home-ci
+	rm -f home-ci-diag
 	rm -rf /tmp/home-ci/e2e/
 	rm -rf /tmp/test-repo-home-ci
 	rm -rf /tmp/test-repo-timeout
