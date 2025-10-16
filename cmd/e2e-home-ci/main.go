@@ -34,6 +34,7 @@ func main() {
 		fmt.Println("  fail                 - Single commit failure test")
 		fmt.Println("  timeout              - Single commit timeout test (~1 minute)")
 		fmt.Println("  dispatch-one-success - Single commit GitHub Actions dispatch test")
+		fmt.Println("  dispatch-no-token-file - Single commit dispatch test with missing token file")
 		fmt.Println("  quick                - Multi commit test (4 test cases, 30 seconds)")
 		fmt.Println("  dispatch-all         - Multi commit test with dispatch (4 test cases + dispatch)")
 		fmt.Println("  normal               - Multi branch integration test (default)")
@@ -44,6 +45,7 @@ func main() {
 		fmt.Println("  e2e-home-ci -type=fail                  # Single commit failure test")
 		fmt.Println("  e2e-home-ci -type=timeout               # Single commit timeout test")
 		fmt.Println("  e2e-home-ci -type=dispatch-one-success  # Single commit dispatch test")
+		fmt.Println("  e2e-home-ci -type=dispatch-no-token-file # Single commit dispatch test (no token)")
 		fmt.Println("  e2e-home-ci -type=quick                 # Multi commit quick test")
 		fmt.Println("  e2e-home-ci -type=dispatch-all          # Multi commit test with dispatch")
 		fmt.Println("  e2e-home-ci -type=normal -duration=5m   # Multi branch integration test")
@@ -66,7 +68,7 @@ func main() {
 		duration = 30 * time.Second // Short duration for single commit tests
 	case TestTimeout:
 		duration = 60 * time.Second // Fixed duration for timeout tests
-	case TestDispatchOneSuccess:
+	case TestDispatchOneSuccess, TestDispatchNoTokenFile:
 		duration = 45 * time.Second // Slightly longer for dispatch tests
 	case TestQuick:
 		if duration > 30*time.Second {

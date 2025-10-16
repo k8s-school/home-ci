@@ -16,6 +16,7 @@ const (
 	TestFail
 	TestTimeout
 	TestDispatchOneSuccess
+	TestDispatchNoTokenFile
 	// Multi commit tests
 	TestQuick
 	TestDispatchAll
@@ -24,14 +25,15 @@ const (
 )
 
 var testTypeName = map[TestType]string{
-	TestSuccess:           "success",
-	TestFail:              "fail",
-	TestTimeout:           "timeout",
-	TestDispatchOneSuccess: "dispatch-one-success",
-	TestQuick:             "quick",
-	TestDispatchAll:       "dispatch-all",
-	TestNormal:            "normal",
-	TestLong:              "long",
+	TestSuccess:             "success",
+	TestFail:                "fail",
+	TestTimeout:             "timeout",
+	TestDispatchOneSuccess:  "dispatch-one-success",
+	TestDispatchNoTokenFile: "dispatch-no-token-file",
+	TestQuick:               "quick",
+	TestDispatchAll:         "dispatch-all",
+	TestNormal:              "normal",
+	TestLong:                "long",
 }
 
 // RunningTest represents a test currently in progress
@@ -126,6 +128,8 @@ func parseTestType(s string) TestType {
 		return TestTimeout
 	case "dispatch-one-success":
 		return TestDispatchOneSuccess
+	case "dispatch-no-token-file":
+		return TestDispatchNoTokenFile
 	case "dispatch-all":
 		return TestDispatchAll
 	case "quick":
@@ -139,7 +143,7 @@ func parseTestType(s string) TestType {
 
 // isSingleCommitTest returns true for tests that need only one commit
 func (tt TestType) isSingleCommitTest() bool {
-	return tt == TestSuccess || tt == TestFail || tt == TestTimeout || tt == TestDispatchOneSuccess
+	return tt == TestSuccess || tt == TestFail || tt == TestTimeout || tt == TestDispatchOneSuccess || tt == TestDispatchNoTokenFile
 }
 
 // isMultiCommitTest returns true for tests that need multiple commits

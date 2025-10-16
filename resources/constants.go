@@ -26,6 +26,9 @@ var ConfigTimeout string
 //go:embed e2e/conf/config-dispatch-one-success.yaml
 var ConfigDispatchOneSuccess string
 
+//go:embed e2e/conf/config-dispatch-no-token-file.yaml
+var ConfigDispatchNoTokenFile string
+
 //go:embed e2e/conf/config-dispatch-all.yaml
 var ConfigDispatchAll string
 

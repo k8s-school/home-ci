@@ -1,4 +1,4 @@
-.PHONY: build build-e2e test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-all test-quick test-normal test-long clean clean-all help
+.PHONY: build build-e2e test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-no-token-file test-dispatch-all test-quick test-normal test-long clean clean-all help
 
 # Default target
 help:
@@ -16,7 +16,8 @@ help:
 	@echo "  test-success        Run single commit success test"
 	@echo "  test-fail           Run single commit failure test"
 	@echo "  test-timeout        Run single commit timeout test (~1 minute)"
-	@echo "  test-dispatch-one-success  Run single commit dispatch test"
+	@echo "  test-dispatch-one-success  Run single commit dispatch test (includes artifacts)"
+	@echo "  test-dispatch-no-token-file Run single commit dispatch test (no token file)"
 	@echo "  test-dispatch-all   Run multi commit test with dispatch"
 	@echo "  test-quick          Run multi-commit quick tests (30 seconds)"
 	@echo "  test-normal         Run normal integration tests (3 minutes)"
@@ -67,6 +68,11 @@ test-timeout: build
 test-dispatch-one-success: build
 	@echo "🚀 Running single commit dispatch test..."
 	./e2e-home-ci -type=dispatch-one-success
+
+# Run single commit dispatch test with no token file
+test-dispatch-no-token-file: build
+	@echo "🚀 Running single commit dispatch test (no token file)..."
+	./e2e-home-ci -type=dispatch-no-token-file
 
 # Run multi commit dispatch test
 test-dispatch-all: build

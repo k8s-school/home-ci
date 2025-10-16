@@ -25,7 +25,8 @@ func TestLoadGitHubToken(t *testing.T) {
 		t.Fatalf("Failed to write secret file: %v", err)
 	}
 
-	token, err := loadGitHubToken(secretFile)
+	// Test with absolute path
+	token, err := loadGitHubToken(secretFile, "")
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -35,34 +36,71 @@ func TestLoadGitHubToken(t *testing.T) {
 		t.Errorf("Expected token %s, got %s", expectedToken, token)
 	}
 
-	// Test case 2: File not found
-	_, err = loadGitHubToken("nonexistent.yaml")
-	if err == nil {
-		t.Error("Expected error for nonexistent file, got nil")
+	// Test with relative path and config directory
+	relativeSecretFile := "secret.yaml"
+	token, err = loadGitHubToken(relativeSecretFile, tempDir)
+	if err != nil {
+		t.Fatalf("Expected no error with relative path, got: %v", err)
+	}
+	if token != expectedToken {
+		t.Errorf("Expected token %s with relative path, got %s", expectedToken, token)
 	}
 
-	// Test case 3: Invalid YAML
+	// Test case 2: File not found - absolute path
+	_, err = loadGitHubToken("nonexistent.yaml", "")
+	if err == nil {
+		t.Error("Expected error for nonexistent file with absolute path, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read secret file") {
+		t.Errorf("Expected 'failed to read secret file' error, got: %v", err)
+	}
+
+	// Test case 3: File not found - relative path in non-existent directory
+	_, err = loadGitHubToken("secret.yaml", "/nonexistent/directory")
+	if err == nil {
+		t.Error("Expected error for nonexistent directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read secret file") {
+		t.Errorf("Expected 'failed to read secret file' error, got: %v", err)
+	}
+
+	// Test case 4: File not found - relative path in existing directory but file doesn't exist
+	_, err = loadGitHubToken("nonexistent.yaml", tempDir)
+	if err == nil {
+		t.Error("Expected error for nonexistent file in valid directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read secret file") {
+		t.Errorf("Expected 'failed to read secret file' error, got: %v", err)
+	}
+
+	// Test case 5: Invalid YAML
 	invalidFile := filepath.Join(tempDir, "invalid.yaml")
 	err = os.WriteFile(invalidFile, []byte("invalid: yaml: content: ["), 0600)
 	if err != nil {
 		t.Fatalf("Failed to write invalid file: %v", err)
 	}
 
-	_, err = loadGitHubToken(invalidFile)
+	_, err = loadGitHubToken(invalidFile, "")
 	if err == nil {
 		t.Error("Expected error for invalid YAML, got nil")
 	}
+	if !strings.Contains(err.Error(), "failed to parse secret file") {
+		t.Errorf("Expected 'failed to parse secret file' error, got: %v", err)
+	}
 
-	// Test case 4: Missing github_token field
+	// Test case 6: Missing github_token field
 	emptyFile := filepath.Join(tempDir, "empty.yaml")
 	err = os.WriteFile(emptyFile, []byte("other_field: value"), 0600)
 	if err != nil {
 		t.Fatalf("Failed to write empty file: %v", err)
 	}
 
-	_, err = loadGitHubToken(emptyFile)
+	_, err = loadGitHubToken(emptyFile, "")
 	if err == nil {
 		t.Error("Expected error for missing github_token, got nil")
+	}
+	if !strings.Contains(err.Error(), "github_token not found in secret file") {
+		t.Errorf("Expected 'github_token not found' error, got: %v", err)
 	}
 }
 
@@ -126,12 +164,15 @@ Test summary: 2/3 tests passed
 		GitHubActionsDispatch: config.GitHubActionsDispatch{
 			Enabled:         true,
 			GitHubRepo:      "k8s-school/home-ci",
-			GitHubTokenFile: secretPath,
+			GitHubTokenFile: "secret.yaml", // Use relative path so it gets resolved via config directory
 			DispatchType:    "test-home-ci-with-artifacts",
 		},
 	}
 
-	tr := &TestRunner{config: *cfg}
+	tr := &TestRunner{
+		config:     *cfg,
+		configPath: "/home/fjammes/src/github.com/k8s-school/home-ci/some-config.yaml", // Mock config path in project root
+	}
 	err = tr.notifyGitHubActions("main", "abcdef123456", false, logFilePath, resultFilePath)
 	if err != nil {
 		t.Fatalf("Expected no error for valid dispatch with artifacts, got: %v", err)
@@ -151,7 +192,7 @@ func TestIntegrationLoadGitHubToken(t *testing.T) {
 	}
 
 	// Test loading the real secret file
-	token, err := loadGitHubToken(secretPath)
+	token, err := loadGitHubToken(secretPath, "")
 	if err != nil {
 		t.Fatalf("Failed to load GitHub token from real secret.yaml: %v", err)
 	}
