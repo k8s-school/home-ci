@@ -23,8 +23,11 @@ var ConfigFail string
 //go:embed e2e/conf/config-timeout.yaml
 var ConfigTimeout string
 
-//go:embed e2e/conf/config-dispatch.yaml
-var ConfigDispatch string
+//go:embed e2e/conf/config-dispatch-one-success.yaml
+var ConfigDispatchOneSuccess string
+
+//go:embed e2e/conf/config-dispatch-all.yaml
+var ConfigDispatchAll string
 
 //go:embed e2e/conf/config-quick.yaml
 var ConfigQuick string

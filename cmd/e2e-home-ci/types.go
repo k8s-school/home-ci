@@ -15,21 +15,23 @@ const (
 	TestSuccess TestType = iota
 	TestFail
 	TestTimeout
-	TestDispatch
+	TestDispatchOneSuccess
 	// Multi commit tests
 	TestQuick
+	TestDispatchAll
 	TestNormal
 	TestLong
 )
 
 var testTypeName = map[TestType]string{
-	TestSuccess:  "success",
-	TestFail:     "fail",
-	TestTimeout:  "timeout",
-	TestDispatch: "dispatch",
-	TestQuick:    "quick",
-	TestNormal:   "normal",
-	TestLong:     "long",
+	TestSuccess:           "success",
+	TestFail:              "fail",
+	TestTimeout:           "timeout",
+	TestDispatchOneSuccess: "dispatch-one-success",
+	TestQuick:             "quick",
+	TestDispatchAll:       "dispatch-all",
+	TestNormal:            "normal",
+	TestLong:              "long",
 }
 
 // RunningTest represents a test currently in progress
@@ -122,8 +124,10 @@ func parseTestType(s string) TestType {
 		return TestFail
 	case "timeout":
 		return TestTimeout
-	case "dispatch":
-		return TestDispatch
+	case "dispatch-one-success":
+		return TestDispatchOneSuccess
+	case "dispatch-all":
+		return TestDispatchAll
 	case "quick":
 		return TestQuick
 	case "long":
@@ -135,12 +139,12 @@ func parseTestType(s string) TestType {
 
 // isSingleCommitTest returns true for tests that need only one commit
 func (tt TestType) isSingleCommitTest() bool {
-	return tt == TestSuccess || tt == TestFail || tt == TestTimeout || tt == TestDispatch
+	return tt == TestSuccess || tt == TestFail || tt == TestTimeout || tt == TestDispatchOneSuccess
 }
 
 // isMultiCommitTest returns true for tests that need multiple commits
 func (tt TestType) isMultiCommitTest() bool {
-	return tt == TestQuick || tt == TestNormal || tt == TestLong
+	return tt == TestQuick || tt == TestDispatchAll || tt == TestNormal || tt == TestLong
 }
 
 // getTestDirectory returns the base directory for this test type

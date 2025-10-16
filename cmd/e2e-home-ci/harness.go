@@ -424,8 +424,10 @@ func (th *E2ETestHarness) getTestTypeName() string {
 		return "Quick Test"
 	case TestLong:
 		return "Long Test"
-	case TestDispatch:
-		return "Dispatch Test"
+	case TestDispatchOneSuccess:
+		return "Dispatch One Success Test"
+	case TestDispatchAll:
+		return "Dispatch All Test"
 	default:
 		return "Normal Test"
 	}

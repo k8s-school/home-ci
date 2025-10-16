@@ -30,20 +30,22 @@ func main() {
 		flag.PrintDefaults()
 		fmt.Println("")
 		fmt.Println("Test Types:")
-		fmt.Println("  success  - Single commit success test")
-		fmt.Println("  fail     - Single commit failure test")
-		fmt.Println("  timeout  - Single commit timeout test (~1 minute)")
-		fmt.Println("  dispatch - Single commit GitHub Actions dispatch test")
-		fmt.Println("  quick    - Multi commit test (4 test cases, 30 seconds)")
-		fmt.Println("  normal   - Multi branch integration test (default)")
-		fmt.Println("  long     - Extended multi branch test (specified duration)")
+		fmt.Println("  success              - Single commit success test")
+		fmt.Println("  fail                 - Single commit failure test")
+		fmt.Println("  timeout              - Single commit timeout test (~1 minute)")
+		fmt.Println("  dispatch-one-success - Single commit GitHub Actions dispatch test")
+		fmt.Println("  quick                - Multi commit test (4 test cases, 30 seconds)")
+		fmt.Println("  dispatch-all         - Multi commit test with dispatch (4 test cases + dispatch)")
+		fmt.Println("  normal               - Multi branch integration test (default)")
+		fmt.Println("  long                 - Extended multi branch test (specified duration)")
 		fmt.Println("")
 		fmt.Println("Examples:")
 		fmt.Println("  e2e-home-ci -type=success               # Single commit success test")
 		fmt.Println("  e2e-home-ci -type=fail                  # Single commit failure test")
 		fmt.Println("  e2e-home-ci -type=timeout               # Single commit timeout test")
-		fmt.Println("  e2e-home-ci -type=dispatch              # Single commit dispatch test")
+		fmt.Println("  e2e-home-ci -type=dispatch-one-success  # Single commit dispatch test")
 		fmt.Println("  e2e-home-ci -type=quick                 # Multi commit quick test")
+		fmt.Println("  e2e-home-ci -type=dispatch-all          # Multi commit test with dispatch")
 		fmt.Println("  e2e-home-ci -type=normal -duration=5m   # Multi branch integration test")
 		fmt.Println("  e2e-home-ci -init                       # Initialize e2e environment")
 		fmt.Println("  e2e-home-ci -type=timeout -no-cleanup   # Keep repos for debugging")
@@ -64,11 +66,15 @@ func main() {
 		duration = 30 * time.Second // Short duration for single commit tests
 	case TestTimeout:
 		duration = 60 * time.Second // Fixed duration for timeout tests
-	case TestDispatch:
+	case TestDispatchOneSuccess:
 		duration = 45 * time.Second // Slightly longer for dispatch tests
 	case TestQuick:
 		if duration > 30*time.Second {
 			duration = 30 * time.Second
+		}
+	case TestDispatchAll:
+		if duration > 45*time.Second {
+			duration = 45 * time.Second // Longer for dispatch-all tests
 		}
 	// TestNormal and TestLong use user-specified duration
 	}
@@ -157,7 +163,7 @@ func main() {
 	switch testType {
 	case TestTimeout:
 		success = th.timeoutDetected && th.verifyCleanupExecuted()
-	case TestSuccess, TestFail, TestDispatch:
+	case TestSuccess, TestFail, TestDispatchOneSuccess:
 		// For single commit tests, success means at least one test was detected
 		success = th.totalTestsDetected > 0
 	default:

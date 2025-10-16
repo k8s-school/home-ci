@@ -1,4 +1,4 @@
-.PHONY: build build-e2e test test-success test-fail test-timeout test-dispatch test-quick test-normal test-long clean clean-all help
+.PHONY: build build-e2e test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-all test-quick test-normal test-long clean clean-all help
 
 # Default target
 help:
@@ -16,7 +16,8 @@ help:
 	@echo "  test-success        Run single commit success test"
 	@echo "  test-fail           Run single commit failure test"
 	@echo "  test-timeout        Run single commit timeout test (~1 minute)"
-	@echo "  test-dispatch       Run single commit dispatch test"
+	@echo "  test-dispatch-one-success  Run single commit dispatch test"
+	@echo "  test-dispatch-all   Run multi commit test with dispatch"
 	@echo "  test-quick          Run multi-commit quick tests (30 seconds)"
 	@echo "  test-normal         Run normal integration tests (3 minutes)"
 	@echo "  test-long           Run extended integration tests (10 minutes)"
@@ -62,10 +63,15 @@ test-timeout: build
 	@echo "🕐 Running timeout validation test..."
 	./e2e-home-ci -type=timeout
 
-# Run dispatch test
-test-dispatch: build
-	@echo "🚀 Running dispatch test..."
-	./e2e-home-ci -type=dispatch
+# Run single commit dispatch test
+test-dispatch-one-success: build
+	@echo "🚀 Running single commit dispatch test..."
+	./e2e-home-ci -type=dispatch-one-success
+
+# Run multi commit dispatch test
+test-dispatch-all: build
+	@echo "🚀 Running multi commit dispatch test..."
+	./e2e-home-ci -type=dispatch-all
 
 # Run quick tests (4 commits)
 test-quick: build

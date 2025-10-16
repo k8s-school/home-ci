@@ -52,8 +52,10 @@ func (th *E2ETestHarness) getConfigForTestType() (string, string, string) {
 		return "config-fail.yaml", resources.ConfigFail, "Fail"
 	case TestTimeout:
 		return "config-timeout.yaml", resources.ConfigTimeout, "Timeout"
-	case TestDispatch:
-		return "config-dispatch.yaml", resources.ConfigDispatch, "Dispatch"
+	case TestDispatchOneSuccess:
+		return "config-dispatch-one-success.yaml", resources.ConfigDispatchOneSuccess, "Dispatch-One-Success"
+	case TestDispatchAll:
+		return "config-dispatch-all.yaml", resources.ConfigDispatchAll, "Dispatch-All"
 	case TestQuick:
 		return "config-quick.yaml", resources.ConfigQuick, "Quick"
 	case TestLong:
@@ -73,7 +75,8 @@ func (th *E2ETestHarness) createAllConfigFiles() error {
 		{"Success", "config-success.yaml", resources.ConfigSuccess},
 		{"Fail", "config-fail.yaml", resources.ConfigFail},
 		{"Timeout", "config-timeout.yaml", resources.ConfigTimeout},
-		{"Dispatch", "config-dispatch.yaml", resources.ConfigDispatch},
+		{"Dispatch-One-Success", "config-dispatch-one-success.yaml", resources.ConfigDispatchOneSuccess},
+		{"Dispatch-All", "config-dispatch-all.yaml", resources.ConfigDispatchAll},
 		{"Quick", "config-quick.yaml", resources.ConfigQuick},
 		{"Normal", "config-normal.yaml", resources.ConfigNormal},
 		{"Long", "config-long.yaml", resources.ConfigLong},

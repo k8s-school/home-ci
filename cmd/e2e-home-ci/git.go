@@ -40,6 +40,8 @@ func (th *E2ETestHarness) initializeGitRepo() error {
 		return th.createSingleCommitRepository()
 	case th.testType == TestQuick:
 		return th.createQuickTestRepository()
+	case th.testType == TestDispatchAll:
+		return th.createDispatchAllTestRepository()
 	default: // TestNormal, TestLong
 		return th.createMultiBranchRepository()
 	}
@@ -264,8 +266,8 @@ func (th *E2ETestHarness) createSingleCommitRepository() error {
 		commitMessage = "TIMEOUT: This commit should timeout"
 		fileName = "timeout.txt"
 		content = "This file should make the test timeout"
-	case TestDispatch:
-		commitMessage = "Dispatch test commit"
+	case TestDispatchOneSuccess:
+		commitMessage = "Single dispatch test commit"
 		fileName = "dispatch.txt"
 		content = "This commit should trigger GitHub Actions dispatch"
 	}
@@ -309,6 +311,47 @@ func (th *E2ETestHarness) createQuickTestRepository() error {
 		{"FAIL: Quick test failure case", "quick-fail.txt", "This should fail quickly"},
 		{"TIMEOUT: Quick test timeout case", "quick-timeout.txt", "This should timeout quickly"},
 		{"Quick test dispatch case", "quick-dispatch.txt", "This should trigger dispatch"},
+	}
+
+	for _, testCase := range testCases {
+		filePath := filepath.Join(th.testRepoPath, testCase.fileName)
+		if err := os.WriteFile(filePath, []byte(testCase.content), filePerm); err != nil {
+			return fmt.Errorf("failed to create %s: %w", testCase.fileName, err)
+		}
+
+		if err := th.runGitCommand("git", "add", testCase.fileName); err != nil {
+			return fmt.Errorf("failed to add %s: %w", testCase.fileName, err)
+		}
+
+		if err := th.runGitCommand("git", "commit", "-m", testCase.message); err != nil {
+			return fmt.Errorf("failed to commit %s: %w", testCase.message, err)
+		}
+	}
+
+	th.displayRepositoryState()
+	return nil
+}
+
+// createDispatchAllTestRepository creates a repository with 4 test commits with dispatch enabled
+func (th *E2ETestHarness) createDispatchAllTestRepository() error {
+	if err := th.createInitialFiles(); err != nil {
+		return err
+	}
+
+	if err := th.createInitialCommit(); err != nil {
+		return err
+	}
+
+	// Create 4 commits for different test scenarios with dispatch
+	testCases := []struct {
+		message  string
+		fileName string
+		content  string
+	}{
+		{"SUCCESS: Dispatch-all test success case", "dispatch-success.txt", "This should succeed with dispatch"},
+		{"FAIL: Dispatch-all test failure case", "dispatch-fail.txt", "This should fail with dispatch"},
+		{"TIMEOUT: Dispatch-all test timeout case", "dispatch-timeout.txt", "This should timeout with dispatch"},
+		{"Dispatch-all test success case", "dispatch-normal.txt", "This should succeed and trigger dispatch"},
 	}
 
 	for _, testCase := range testCases {
