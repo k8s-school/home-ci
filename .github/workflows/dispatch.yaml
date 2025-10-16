@@ -60,12 +60,9 @@ jobs:
       - name: Set artifact name
         if: github.event.client_payload.artifacts
         run: |
-          # Extract first 8 characters of commit hash
-          COMMIT_SHORT=$(echo "${{ github.event.client_payload.commit }}" | cut -c1-8)
-          # Clean branch name for artifact naming (replace / with _)
-          BRANCH_CLEAN=$(echo "${{ github.event.client_payload.branch }}" | tr '/' '_')
-          echo "ARTIFACT_NAME=log-${BRANCH_CLEAN}-${COMMIT_SHORT}" >> $GITHUB_ENV
-          echo "Artifact name will be: log-${BRANCH_CLEAN}-${COMMIT_SHORT}"
+          ARTIFACT_NAME="${{ github.event.client_payload.artifact_name }}"
+          echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+          echo "Artifact name will be: ${ARTIFACT_NAME}"
 
       - name: Upload artifacts to GitHub Actions
         if: github.event.client_payload.artifacts

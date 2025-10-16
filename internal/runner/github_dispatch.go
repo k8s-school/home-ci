@@ -205,13 +205,22 @@ func createArtifactsMap(branch, commit string, success bool, logFilePath, result
 
 // createClientPayload creates the complete client payload for the dispatch
 func createClientPayload(branch, commit string, success bool, logFilePath, resultFilePath string) map[string]interface{} {
+	// Create artifact name with cleaned branch name and short commit
+	branchClean := strings.ReplaceAll(branch, "/", "_")
+	commitShort := commit
+	if len(commit) > 8 {
+		commitShort = commit[:8]
+	}
+	artifactName := fmt.Sprintf("log-%s-%s", branchClean, commitShort)
+
 	return map[string]interface{}{
-		"branch":    branch,
-		"commit":    commit,
-		"success":   success,
-		"timestamp": fmt.Sprintf("%d", time.Now().Unix()),
-		"source":    "home-ci",
-		"artifacts": createArtifactsMap(branch, commit, success, logFilePath, resultFilePath),
+		"branch":        branch,
+		"commit":        commit,
+		"success":       success,
+		"timestamp":     fmt.Sprintf("%d", time.Now().Unix()),
+		"source":        "home-ci",
+		"artifact_name": artifactName,
+		"artifacts":     createArtifactsMap(branch, commit, success, logFilePath, resultFilePath),
 		"metadata": map[string]interface{}{
 			"branch":  branch,
 			"commit":  commit,
