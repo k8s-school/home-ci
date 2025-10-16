@@ -63,7 +63,7 @@ jobs:
           # Extract first 8 characters of commit hash
           COMMIT_SHORT=$(echo "${{ github.event.client_payload.commit }}" | cut -c1-8)
           # Clean branch name for artifact naming (replace / with _)
-          BRANCH_CLEAN=$(echo "${{ github.event.client_payload.branch }}" | sed 's|/|_|g')
+          BRANCH_CLEAN=$(echo "${{ github.event.client_payload.branch }}" | tr '/' '_')
           echo "ARTIFACT_NAME=log-${BRANCH_CLEAN}-${COMMIT_SHORT}" >> $GITHUB_ENV
           echo "Artifact name will be: log-${BRANCH_CLEAN}-${COMMIT_SHORT}"
 
