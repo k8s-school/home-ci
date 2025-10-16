@@ -319,8 +319,8 @@ func (th *E2ETestHarness) createMultiTypeTestRepository() error {
 		content  string
 	}{
 		{"main", fmt.Sprintf("SUCCESS: %s test success case", testPrefix), fmt.Sprintf("%s-success.txt", strings.ToLower(testPrefix)), fmt.Sprintf("This should succeed with %s", strings.ToLower(testPrefix))},
-		{"feature-test-fail", fmt.Sprintf("FAIL: %s test failure case", testPrefix), fmt.Sprintf("%s-fail.txt", strings.ToLower(testPrefix)), fmt.Sprintf("This should fail with %s", strings.ToLower(testPrefix))},
-		{"bugfix-timeout", fmt.Sprintf("TIMEOUT: %s test timeout case", testPrefix), fmt.Sprintf("%s-timeout.txt", strings.ToLower(testPrefix)), fmt.Sprintf("This should timeout with %s", strings.ToLower(testPrefix))},
+		{"feature/test-fail", fmt.Sprintf("FAIL: %s test failure case", testPrefix), fmt.Sprintf("%s-fail.txt", strings.ToLower(testPrefix)), fmt.Sprintf("This should fail with %s", strings.ToLower(testPrefix))},
+		{"bugfix/timeout", fmt.Sprintf("TIMEOUT: %s test timeout case", testPrefix), fmt.Sprintf("%s-timeout.txt", strings.ToLower(testPrefix)), fmt.Sprintf("This should timeout with %s", strings.ToLower(testPrefix))},
 	}
 
 	for _, testCase := range testCases {
@@ -390,7 +390,7 @@ func (th *E2ETestHarness) displayRepositoryState() {
 
 	// Show recent commits for each branch
 	if th.testType == TestDispatchAll || th.testType == TestQuick {
-		branches := []string{"main", "feature-test-fail", "bugfix-timeout"}
+		branches := []string{"main", "feature/test-fail", "bugfix/timeout"}
 		for _, branch := range branches {
 			log.Printf("Recent commits on %s:", branch)
 			logArgs := []string{"git", "log", "--oneline", fmt.Sprintf("-%d", logDisplayCount), branch}

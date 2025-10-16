@@ -62,8 +62,10 @@ jobs:
         run: |
           # Extract first 8 characters of commit hash
           COMMIT_SHORT=$(echo "${{ github.event.client_payload.commit }}" | cut -c1-8)
-          echo "ARTIFACT_NAME=log-${{ github.event.client_payload.branch }}-${COMMIT_SHORT}" >> $GITHUB_ENV
-          echo "Artifact name will be: log-${{ github.event.client_payload.branch }}-${COMMIT_SHORT}"
+          # Clean branch name for artifact naming (replace / with _)
+          BRANCH_CLEAN=$(echo "${{ github.event.client_payload.branch }}" | sed 's|/|_|g')
+          echo "ARTIFACT_NAME=log-${BRANCH_CLEAN}-${COMMIT_SHORT}" >> $GITHUB_ENV
+          echo "Artifact name will be: log-${BRANCH_CLEAN}-${COMMIT_SHORT}"
 
       - name: Upload artifacts to GitHub Actions
         if: github.event.client_payload.artifacts
