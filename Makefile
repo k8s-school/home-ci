@@ -78,16 +78,6 @@ test-dispatch-no-token-file: build
 test-dispatch-all: build
 	@echo "🚀 Running multi commit dispatch test..."
 	./e2e-home-ci -type=dispatch-all
-	@echo ""
-	@echo "📊 Git branches from test repository:"
-	@if [ -d "/tmp/home-ci/e2e/dispatch-all/repo" ]; then \
-		cd /tmp/home-ci/e2e/dispatch-all/repo && git branch -a || echo "No branches found"; \
-	else \
-		echo "Repository not found"; \
-	fi
-	@echo ""
-	@echo "📋 Processed commits (JSON results):"
-	@find /tmp/home-ci/e2e/dispatch-all -name "*.json" -path "*/.home-ci/*" -not -name "state.json" | head -10 | xargs -I {} basename {} .json | sed 's/.*_\([^_]*\)_\([^.]*\)/\1-\2/g' || echo "No results found"
 
 # Run quick tests (4 commits)
 test-quick: build
