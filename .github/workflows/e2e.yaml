@@ -185,3 +185,61 @@ jobs:
 
     - name: Run timeout tests
       run: ./e2e-home-ci -type=timeout
+
+  test-dispatch-one-success:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: e2e-home-ci-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x e2e-home-ci
+
+    - name: Create secret.yaml for dispatch
+      run: |
+        mkdir -p /tmp/home-ci/e2e/dispatch-one-success
+        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-one-success/secret.yaml
+
+    - name: Run dispatch-one-success tests
+      run: ./e2e-home-ci -type=dispatch-one-success
+
+  test-dispatch-all:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: e2e-home-ci-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x e2e-home-ci
+
+    - name: Create secret.yaml for dispatch
+      run: |
+        mkdir -p /tmp/home-ci/e2e/dispatch-all
+        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-all/secret.yaml
+
+    - name: Run dispatch-all tests
+      run: ./e2e-home-ci -type=dispatch-all

@@ -2,7 +2,7 @@ name: Repository Dispatch Test
 
 on:
   repository_dispatch:
-    types: [test-home-ci-with-artifacts]
+    types: [test-home-ci, test-home-ci-dispatch-all, test-home-ci-with-artifacts]
 
 jobs:
   test:
@@ -15,6 +15,7 @@ jobs:
         run: |
           echo "Repository dispatch received!"
           echo "Event type: ${{ github.event.action }}"
+          echo "Dispatch type: ${{ github.event.action }}"
           echo "Client payload: ${{ toJson(github.event.client_payload) }}"
 
       - name: Display artifacts
