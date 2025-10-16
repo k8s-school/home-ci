@@ -48,7 +48,7 @@ and automatically runs tests when changes are detected.`,
 			cfg.KeepTime = duration
 		}
 
-		monitor, err := monitor.NewMonitor(cfg)
+		monitor, err := monitor.NewMonitor(cfg, configPath)
 		if err != nil {
 			return fmt.Errorf("failed to create monitor: %w", err)
 		}

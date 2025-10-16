@@ -55,10 +55,18 @@ func NewGitHubClient(token string) *GitHubClient {
 }
 
 // loadGitHubToken loads the GitHub token from the secret file
-func loadGitHubToken(secretFile string) (string, error) {
-	absolutePath, err := makeAbsolutePath(secretFile)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve secret file path: %w", err)
+func loadGitHubToken(secretFile, configDir string) (string, error) {
+	var absolutePath string
+	var err error
+
+	// If secretFile is relative, resolve it relative to the config directory
+	if !filepath.IsAbs(secretFile) && configDir != "" {
+		absolutePath = filepath.Join(configDir, secretFile)
+	} else {
+		absolutePath, err = makeAbsolutePath(secretFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve secret file path: %w", err)
+		}
 	}
 
 	data, err := os.ReadFile(absolutePath)
@@ -234,8 +242,14 @@ func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool, l
 		return err
 	}
 
+	// Get config directory from config path
+	configDir := ""
+	if tr.configPath != "" {
+		configDir = filepath.Dir(tr.configPath)
+	}
+
 	// Load GitHub token
-	token, err := loadGitHubToken(config.GitHubTokenFile)
+	token, err := loadGitHubToken(config.GitHubTokenFile, configDir)
 	if err != nil {
 		return fmt.Errorf("failed to load GitHub token: %w", err)
 	}

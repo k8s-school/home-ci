@@ -58,6 +58,7 @@ type TestResult struct {
 // TestRunner manages test execution and coordination
 type TestRunner struct {
 	config       config.Config
+	configPath   string        // Path to the config file for resolving relative paths
 	logDir       string
 	testQueue    chan TestJob
 	ctx          context.Context
@@ -79,9 +80,10 @@ type TestExecution struct {
 }
 
 // NewTestRunner creates a new test runner instance
-func NewTestRunner(cfg config.Config, logDir string, ctx context.Context, stateManager StateManager) *TestRunner {
+func NewTestRunner(cfg config.Config, configPath, logDir string, ctx context.Context, stateManager StateManager) *TestRunner {
 	return &TestRunner{
 		config:       cfg,
+		configPath:   configPath,
 		logDir:       logDir,
 		testQueue:    make(chan TestJob, 100),
 		ctx:          ctx,

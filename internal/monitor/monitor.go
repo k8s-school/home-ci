@@ -52,7 +52,7 @@ func NewCleanupManager(keepTime time.Duration, ctx context.Context) *CleanupMana
 	}
 }
 
-func NewMonitor(cfg config.Config) (*Monitor, error) {
+func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 	gitRepo, err := NewGitRepository(cfg.RepoPath)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func NewMonitor(cfg config.Config) (*Monitor, error) {
 	stateFile := filepath.Join(homeCIDir, stateFileName)
 	stateManager := NewStateManager(stateFile)
 
-	testRunner := runner.NewTestRunner(cfg, logDir, ctx, stateManager)
+	testRunner := runner.NewTestRunner(cfg, configPath, logDir, ctx, stateManager)
 	cleanupMgr := NewCleanupManager(cfg.KeepTime, ctx)
 
 	m := &Monitor{
