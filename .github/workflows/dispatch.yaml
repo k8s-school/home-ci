@@ -57,11 +57,19 @@ jobs:
 
           ls -la artifacts/
 
+      - name: Set artifact name
+        if: github.event.client_payload.artifacts
+        run: |
+          # Extract first 8 characters of commit hash
+          COMMIT_SHORT=$(echo "${{ github.event.client_payload.commit }}" | cut -c1-8)
+          echo "ARTIFACT_NAME=log-${{ github.event.client_payload.branch }}-${COMMIT_SHORT}" >> $GITHUB_ENV
+          echo "Artifact name will be: log-${{ github.event.client_payload.branch }}-${COMMIT_SHORT}"
+
       - name: Upload artifacts to GitHub Actions
         if: github.event.client_payload.artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: home-ci-dispatch-artifacts
+          name: ${{ env.ARTIFACT_NAME }}
           path: artifacts/
 
       - name: Setup Go
