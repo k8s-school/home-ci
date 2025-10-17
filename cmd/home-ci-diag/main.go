@@ -156,6 +156,8 @@ func showBranchesWithTestResults(repoPath string) {
 				status := "❌ FAILED"
 				if result.Success {
 					status = "✅ PASSED"
+				} else if result.TimedOut {
+					status = "⏰ TIMEOUT"
 				}
 
 				// Get commit message
