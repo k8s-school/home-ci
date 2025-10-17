@@ -618,13 +618,11 @@ func showBranchTimelines(repoPath string, configPath string) {
 		}
 	}
 
-	fmt.Printf("ℹ️  Home-CI behavior explanation:\n")
-	fmt.Printf("   • Normal operation: Tests only the latest commit per branch\n")
-	fmt.Printf("   • Check interval: %s (how often home-ci scans for new commits)\n", checkInterval)
-	fmt.Printf("   • Multiple tests per branch may occur when:\n")
-	fmt.Printf("     - Branches share common commits (Git's normal behavior)\n")
-	fmt.Printf("     - Home-CI detects previously untested commits in branch history\n")
-	fmt.Printf("     - E2E tests create complex branch hierarchies rapidly\n")
+	fmt.Printf("ℹ️  Home-CI behavior:\n")
+	fmt.Printf("   • Tests only the latest commit per branch (as designed)\n")
+	fmt.Printf("   • Check interval: %s (frequency of commit scanning)\n", checkInterval)
+	fmt.Printf("   • Timeline shows: all commits + tests of latest commit only\n")
+	fmt.Printf("   • Branches may share commit history, but each test targets one branch\n")
 	fmt.Println("")
 
 	branches := getGitBranches(repoPath)
@@ -664,6 +662,12 @@ func showBranchTimelines(repoPath string, configPath string) {
 		// Create timeline events
 		var events []TimelineEvent
 
+		// Get the latest commit for this branch
+		latestCommit := ""
+		if len(commits) > 0 {
+			latestCommit = commits[0].Hash // First commit is the latest (most recent)
+		}
+
 		for _, commit := range commits {
 			// Add commit event
 			events = append(events, TimelineEvent{
@@ -673,8 +677,9 @@ func showBranchTimelines(repoPath string, configPath string) {
 				Message:    commit.Message,
 			})
 
-			// Add test events if they exist
-			if test, exists := testsByCommit[commit.Hash]; exists {
+			// Add test events only if this commit was actually tested for THIS branch
+			// (only the latest commit should have been tested by home-ci)
+			if test, exists := testsByCommit[commit.Hash]; exists && commit.Hash == latestCommit {
 				events = append(events, TimelineEvent{
 					Time:       test.StartTime,
 					Type:       "test_start",
