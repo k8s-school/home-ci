@@ -460,6 +460,10 @@ func showExecutionTimeline(testResults []TestResult, maxConcurrentLimit int) {
 
 	// Display timeline with running tests count
 	fmt.Println("📈 Timeline with concurrent test tracking:")
+	fmt.Println("┌──────────┬────┬────────┬─────────────────────────┬─────────────┐")
+	fmt.Println("│   Time   │ St │ Action │         Test            │   Running   │")
+	fmt.Println("├──────────┼────┼────────┼─────────────────────────┼─────────────┤")
+
 	currentTests := make(map[string]bool)
 	maxConcurrent := 0
 
@@ -480,25 +484,35 @@ func showExecutionTimeline(testResults []TestResult, maxConcurrentLimit int) {
 				status = "🟡"
 			}
 
-			fmt.Printf("%s %s │ START  │ %s %s │ Running: %d tests\n",
+			testName := fmt.Sprintf("%s %s", event.Branch, event.Commit)
+			if len(testName) > 23 {
+				testName = testName[:20] + "..."
+			}
+
+			fmt.Printf("│ %s │ %s │ START  │ %-23s │ %2d tests    │\n",
 				event.Time.Format("15:04:05"),
 				status,
-				event.Branch,
-				event.Commit,
+				testName,
 				concurrent)
 		} else {
 			delete(currentTests, testKey)
 			concurrent := len(currentTests)
 
 			status := "🔵"
-			fmt.Printf("%s %s │ END    │ %s %s │ Running: %d tests\n",
+			testName := fmt.Sprintf("%s %s", event.Branch, event.Commit)
+			if len(testName) > 23 {
+				testName = testName[:20] + "..."
+			}
+
+			fmt.Printf("│ %s │ %s │ END    │ %-23s │ %2d tests    │\n",
 				event.Time.Format("15:04:05"),
 				status,
-				event.Branch,
-				event.Commit,
+				testName,
 				concurrent)
 		}
 	}
+
+	fmt.Println("└──────────┴────┴────────┴─────────────────────────┴─────────────┘")
 
 	fmt.Printf("\n📊 Legend: 🟢 = Safe start  🟡 = At limit  🔴 = Over limit  🔵 = Test end\n")
 	fmt.Printf("📈 Peak concurrency observed: %d tests\n", maxConcurrent)
