@@ -460,9 +460,9 @@ func showExecutionTimeline(testResults []TestResult, maxConcurrentLimit int) {
 
 	// Display timeline with running tests count
 	fmt.Println("📈 Timeline with concurrent test tracking:")
-	fmt.Println("┌──────────┬────┬────────┬─────────────────────────┬─────────────┐")
-	fmt.Println("│   Time   │ St │ Action │         Test            │   Running   │")
-	fmt.Println("├──────────┼────┼────────┼─────────────────────────┼─────────────┤")
+	fmt.Println("┌──────────┬────┬────────┬─────────────────────────────────────┬─────────────┐")
+	fmt.Println("│   Time   │ St │ Action │               Test                  │   Running   │")
+	fmt.Println("├──────────┼────┼────────┼─────────────────────────────────────┼─────────────┤")
 
 	currentTests := make(map[string]bool)
 	maxConcurrent := 0
@@ -485,11 +485,11 @@ func showExecutionTimeline(testResults []TestResult, maxConcurrentLimit int) {
 			}
 
 			testName := fmt.Sprintf("%s %s", event.Branch, event.Commit)
-			if len(testName) > 23 {
-				testName = testName[:20] + "..."
+			if len(testName) > 35 {
+				testName = testName[:32] + "..."
 			}
 
-			fmt.Printf("│ %s │ %s │ START  │ %-23s │ %2d tests    │\n",
+			fmt.Printf("│ %s │ %s │ START  │ %-35s │ %2d tests    │\n",
 				event.Time.Format("15:04:05"),
 				status,
 				testName,
@@ -500,11 +500,11 @@ func showExecutionTimeline(testResults []TestResult, maxConcurrentLimit int) {
 
 			status := "🔵"
 			testName := fmt.Sprintf("%s %s", event.Branch, event.Commit)
-			if len(testName) > 23 {
-				testName = testName[:20] + "..."
+			if len(testName) > 35 {
+				testName = testName[:32] + "..."
 			}
 
-			fmt.Printf("│ %s │ %s │ END    │ %-23s │ %2d tests    │\n",
+			fmt.Printf("│ %s │ %s │ END    │ %-35s │ %2d tests    │\n",
 				event.Time.Format("15:04:05"),
 				status,
 				testName,
@@ -512,7 +512,7 @@ func showExecutionTimeline(testResults []TestResult, maxConcurrentLimit int) {
 		}
 	}
 
-	fmt.Println("└──────────┴────┴────────┴─────────────────────────┴─────────────┘")
+	fmt.Println("└──────────┴────┴────────┴─────────────────────────────────────┴─────────────┘")
 
 	fmt.Printf("\n📊 Legend: 🟢 = Safe start  🟡 = At limit  🔴 = Over limit  🔵 = Test end\n")
 	fmt.Printf("📈 Peak concurrency observed: %d tests\n", maxConcurrent)
