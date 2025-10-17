@@ -40,6 +40,7 @@ func main() {
 		fmt.Println("  normal               - Multi branch integration test (default)")
 		fmt.Println("  long                 - Extended multi branch test (specified duration)")
 		fmt.Println("  concurrent-limit     - Test max_concurrent_runs=2 with 4 branches")
+		fmt.Println("  continuous-ci        - Test continuous integration with max_concurrent_runs=3")
 		fmt.Println("")
 		fmt.Println("Examples:")
 		fmt.Println("  e2e-home-ci -type=success               # Single commit success test")
@@ -51,6 +52,7 @@ func main() {
 		fmt.Println("  e2e-home-ci -type=dispatch-all          # Multi commit test with dispatch")
 		fmt.Println("  e2e-home-ci -type=normal -duration=5m   # Multi branch integration test")
 		fmt.Println("  e2e-home-ci -type=concurrent-limit      # Test concurrent runs limit")
+		fmt.Println("  e2e-home-ci -type=continuous-ci         # Test continuous integration")
 		fmt.Println("  e2e-home-ci -init                       # Initialize e2e environment")
 		fmt.Println("  e2e-home-ci -type=timeout -no-cleanup   # Keep repos for debugging")
 		return
@@ -82,6 +84,8 @@ func main() {
 		}
 	case TestConcurrentLimit:
 		duration = 120 * time.Second // Fixed duration for concurrent limit tests (increased for proper concurrency)
+	case TestContinuousCI:
+		duration = 75 * time.Second // Fixed duration for continuous CI test (optimized for speed)
 	// TestNormal and TestLong use user-specified duration
 	}
 
@@ -153,6 +157,9 @@ func main() {
 	} else if testType == TestConcurrentLimit {
 		log.Println("⏳ Waiting for concurrent limit tests to complete...")
 		time.Sleep(60 * time.Second) // Longer wait for concurrent limit tests due to proper concurrency control
+	} else if testType == TestContinuousCI {
+		log.Println("⏳ Waiting for continuous CI tests to complete...")
+		time.Sleep(45 * time.Second) // Wait for continuous integration tests with variable commits
 	} else {
 		log.Println("⏳ Waiting for final tests to complete...")
 		time.Sleep(30 * time.Second)

@@ -1,4 +1,4 @@
-.PHONY: build build-e2e build-diag test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-no-token-file test-dispatch-all test-quick test-normal test-long clean clean-all help
+.PHONY: build build-e2e build-diag test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-no-token-file test-dispatch-all test-quick test-normal test-long test-concurrent-limit test-continuous-ci clean clean-all help
 
 # Default target
 help:
@@ -24,6 +24,7 @@ help:
 	@echo "  test-normal         Run normal integration tests (3 minutes)"
 	@echo "  test-long           Run extended integration tests (10 minutes)"
 	@echo "  test-concurrent-limit Test max_concurrent_runs=2 with 4 branches"
+	@echo "  test-continuous-ci  Test continuous integration with max_concurrent_runs=3"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make build && make test"
@@ -112,6 +113,14 @@ test-concurrent-limit: build
 	@echo ""
 	@echo "🔍 Verifying concurrency compliance:"
 	./home-ci-diag -config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml -check-concurrency
+
+# Run continuous integration test
+test-continuous-ci: build
+	@echo "🔄 Running continuous integration test (max_concurrent_runs=3)..."
+	./e2e-home-ci -type=continuous-ci
+	@echo ""
+	@echo "🔍 Verifying continuous integration compliance:"
+	./home-ci-diag -config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml -check-concurrency
 
 # Clean build artifacts
 clean:

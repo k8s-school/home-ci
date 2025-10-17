@@ -154,6 +154,12 @@ func (th *E2ETestHarness) simulateActivity() {
 		return
 	}
 
+	// Special handling for continuous CI test
+	if th.testType == TestContinuousCI {
+		th.simulateContinuousActivity()
+		return
+	}
+
 	log.Printf("🎯 Starting activity simulation for %v", th.duration)
 
 	ticker := time.NewTicker(45 * time.Second) // Create a commit every 45 seconds
@@ -211,6 +217,92 @@ func (th *E2ETestHarness) simulateConcurrentActivity() {
 	}
 
 	log.Printf("🏁 All concurrent test commits created")
+}
+
+// simulateContinuousActivity simulates continuous integration with variable commit timing
+// Tests max_concurrent_runs=3 with realistic developer workflow
+func (th *E2ETestHarness) simulateContinuousActivity() {
+	log.Printf("🎯 Starting continuous CI test - simulating active development")
+
+	// Start with existing branches with different commit types
+	initialBranches := map[string]string{
+		"main":             "INIT: Main branch setup (success)",
+		"feature/existing": "INIT: Existing feature work (success)",
+		"bugfix/slow":      "INIT: Slow running bugfix (timeout)",
+	}
+
+	// Create initial commits
+	log.Printf("📝 Creating initial commits on existing branches...")
+	for branch, message := range initialBranches {
+		if err := th.createCommitWithMessage(branch, message); err != nil {
+			log.Printf("❌ Failed to create initial commit on %s: %v", branch, err)
+		} else {
+			log.Printf("✅ Created initial commit on %s", branch)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	log.Printf("🎯 Starting continuous development simulation for %v", th.duration)
+
+	// Variable timing: 8s, 12s, 6s, 15s, 10s, 7s
+	commitIntervals := []time.Duration{
+		8 * time.Second,  // First additional commit
+		12 * time.Second, // New branch creation
+		6 * time.Second,  // Quick commit
+		15 * time.Second, // Another new branch
+		10 * time.Second, // Commit to existing
+		7 * time.Second,  // Final commits
+	}
+
+	commitPlans := []struct {
+		branch  string
+		message string
+		action  string
+	}{
+		{"main", "ADD: New main feature (success)", "existing"},
+		{"feature/new-api", "NEW: API development start (success)", "new"},
+		{"bugfix/slow", "FIX: Performance improvement (timeout)", "existing"},
+		{"hotfix/urgent", "NEW: Critical security fix (fail)", "new"},
+		{"feature/existing", "UPDATE: Feature enhancement (success)", "existing"},
+		{"main", "MERGE: Integrate hotfix (success)", "existing"},
+	}
+
+	timeout := time.After(th.duration)
+	commitIndex := 0
+
+	for commitIndex < len(commitPlans) {
+		if commitIndex < len(commitIntervals) {
+			timer := time.After(commitIntervals[commitIndex])
+
+			select {
+			case <-timeout:
+				log.Printf("⏰ Continuous CI simulation completed (timeout)")
+				return
+			case <-timer:
+				if commitIndex < len(commitPlans) {
+					plan := commitPlans[commitIndex]
+
+					if plan.action == "new" {
+						log.Printf("📝 Creating new branch: %s", plan.branch)
+					} else {
+						log.Printf("📝 Adding commit to existing branch: %s", plan.branch)
+					}
+
+					if err := th.createCommitWithMessage(plan.branch, plan.message); err != nil {
+						log.Printf("❌ Failed to create commit on %s: %v", plan.branch, err)
+					} else {
+						log.Printf("✅ Created commit on %s: %s", plan.branch, plan.message)
+					}
+
+					commitIndex++
+				}
+			}
+		} else {
+			break
+		}
+	}
+
+	log.Printf("🏁 Continuous development simulation completed - %d commits created", commitIndex+len(initialBranches))
 }
 
 // countTestsFromResults counts the number of tests by counting JSON result files

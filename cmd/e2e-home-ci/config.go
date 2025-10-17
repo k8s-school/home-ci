@@ -64,6 +64,8 @@ func (th *E2ETestHarness) getConfigForTestType() (string, string, string) {
 		return "config-long.yaml", resources.ConfigLong, "Long"
 	case TestConcurrentLimit:
 		return "config-concurrent-limit.yaml", resources.ConfigConcurrentLimit, "Concurrent-Limit"
+	case TestContinuousCI:
+		return "config-continuous-ci.yaml", resources.ConfigContinuousCI, "Continuous-CI"
 	default: // TestNormal
 		return "config-normal.yaml", resources.ConfigNormal, "Normal"
 	}
@@ -85,6 +87,8 @@ func (th *E2ETestHarness) createAllConfigFiles() error {
 		{"Quick", "config-quick.yaml", resources.ConfigQuick},
 		{"Normal", "config-normal.yaml", resources.ConfigNormal},
 		{"Long", "config-long.yaml", resources.ConfigLong},
+		{"Concurrent-Limit", "config-concurrent-limit.yaml", resources.ConfigConcurrentLimit},
+		{"Continuous-CI", "config-continuous-ci.yaml", resources.ConfigContinuousCI},
 	}
 
 	for _, config := range configTypes {

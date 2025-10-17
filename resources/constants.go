@@ -44,5 +44,8 @@ var ConfigLong string
 //go:embed e2e/conf/config-concurrent-limit.yaml
 var ConfigConcurrentLimit string
 
+//go:embed e2e/conf/config-continuous-ci.yaml
+var ConfigContinuousCI string
+
 //go:embed e2e/test-expectations.yaml
 var TestExpectations string

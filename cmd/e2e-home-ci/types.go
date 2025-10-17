@@ -23,6 +23,7 @@ const (
 	TestNormal
 	TestLong
 	TestConcurrentLimit
+	TestContinuousCI
 )
 
 var testTypeName = map[TestType]string{
@@ -36,6 +37,7 @@ var testTypeName = map[TestType]string{
 	TestNormal:              "normal",
 	TestLong:                "long",
 	TestConcurrentLimit:     "concurrent-limit",
+	TestContinuousCI:        "continuous-ci",
 }
 
 // RunningTest represents a test currently in progress
@@ -140,6 +142,8 @@ func parseTestType(s string) TestType {
 		return TestLong
 	case "concurrent-limit":
 		return TestConcurrentLimit
+	case "continuous-ci":
+		return TestContinuousCI
 	default:
 		return TestNormal
 	}
@@ -152,7 +156,7 @@ func (tt TestType) isSingleCommitTest() bool {
 
 // isMultiCommitTest returns true for tests that need multiple commits
 func (tt TestType) isMultiCommitTest() bool {
-	return tt == TestQuick || tt == TestDispatchAll || tt == TestNormal || tt == TestLong || tt == TestConcurrentLimit
+	return tt == TestQuick || tt == TestDispatchAll || tt == TestNormal || tt == TestLong || tt == TestConcurrentLimit || tt == TestContinuousCI
 }
 
 // getTestDirectory returns the base directory for this test type
