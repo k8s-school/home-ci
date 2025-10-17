@@ -315,6 +315,9 @@ func checkConcurrencyCompliance(repoPath, configPath string) {
 		return
 	}
 
+	// Display test execution timeline
+	showExecutionTimeline(testResults, config.MaxConcurrentRuns)
+
 	// Analyze concurrency
 	maxConcurrent, violations := analyzeConcurrency(testResults)
 
@@ -390,6 +393,116 @@ func readTestResults(repoPath string) ([]TestResult, error) {
 type ConcurrencyViolation struct {
 	Time  time.Time
 	Count int
+}
+
+// showExecutionTimeline displays a timeline of test execution for concurrency analysis
+func showExecutionTimeline(testResults []TestResult, maxConcurrentLimit int) {
+	fmt.Println("")
+	fmt.Println("⏰ Test Execution Timeline:")
+	fmt.Println("══════════════════════════")
+
+	if len(testResults) == 0 {
+		fmt.Println("No test results to display")
+		return
+	}
+
+	// Sort tests by start time
+	sort.Slice(testResults, func(i, j int) bool {
+		return testResults[i].StartTime.Before(testResults[j].StartTime)
+	})
+
+	// Find the overall time span
+	startTime := testResults[0].StartTime
+	var endTime time.Time
+	for _, result := range testResults {
+		if result.EndTime.After(endTime) {
+			endTime = result.EndTime
+		}
+	}
+
+	// Display each test with its timeline
+	fmt.Printf("📊 Overall test period: %s to %s (duration: %s)\n\n",
+		startTime.Format("15:04:05"),
+		endTime.Format("15:04:05"),
+		endTime.Sub(startTime).Round(time.Second))
+
+	// Create timeline events to track concurrency
+	type TimelineEvent struct {
+		Time   time.Time
+		Type   string // "start" or "end"
+		Branch string
+		Commit string
+	}
+
+	var events []TimelineEvent
+	for _, result := range testResults {
+		events = append(events, TimelineEvent{
+			Time:   result.StartTime,
+			Type:   "start",
+			Branch: result.Branch,
+			Commit: result.Commit[:8],
+		})
+		events = append(events, TimelineEvent{
+			Time:   result.EndTime,
+			Type:   "end",
+			Branch: result.Branch,
+			Commit: result.Commit[:8],
+		})
+	}
+
+	// Sort events by time
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].Time.Equal(events[j].Time) {
+			return events[i].Type == "end" && events[j].Type == "start"
+		}
+		return events[i].Time.Before(events[j].Time)
+	})
+
+	// Display timeline with running tests count
+	fmt.Println("📈 Timeline with concurrent test tracking:")
+	currentTests := make(map[string]bool)
+	maxConcurrent := 0
+
+	for _, event := range events {
+		testKey := event.Branch + "-" + event.Commit
+
+		if event.Type == "start" {
+			currentTests[testKey] = true
+			concurrent := len(currentTests)
+			if concurrent > maxConcurrent {
+				maxConcurrent = concurrent
+			}
+
+			status := "🟢"
+			if concurrent > maxConcurrentLimit {
+				status = "🔴"
+			} else if concurrent == maxConcurrentLimit {
+				status = "🟡"
+			}
+
+			fmt.Printf("%s %s │ START  │ %s %s │ Running: %d tests\n",
+				event.Time.Format("15:04:05"),
+				status,
+				event.Branch,
+				event.Commit,
+				concurrent)
+		} else {
+			delete(currentTests, testKey)
+			concurrent := len(currentTests)
+
+			status := "🔵"
+			fmt.Printf("%s %s │ END    │ %s %s │ Running: %d tests\n",
+				event.Time.Format("15:04:05"),
+				status,
+				event.Branch,
+				event.Commit,
+				concurrent)
+		}
+	}
+
+	fmt.Printf("\n📊 Legend: 🟢 = Safe start  🟡 = At limit  🔴 = Over limit  🔵 = Test end\n")
+	fmt.Printf("📈 Peak concurrency observed: %d tests\n", maxConcurrent)
+	fmt.Println("")
 }
 
 // analyzeConcurrency analyzes test execution times to find maximum concurrency
