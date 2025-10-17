@@ -19,6 +19,7 @@ func main() {
 	var (
 		configPathFlag      = flag.String("config", "", "Path to the home-ci config file (required)")
 		checkConcurrencyFlag = flag.Bool("check-concurrency", false, "Check that max_concurrent_runs was respected")
+		showTimelineFlag    = flag.Bool("show-timeline", false, "Show timeline of commits and tests per branch")
 		helpFlag            = flag.Bool("help", false, "Show help")
 	)
 	flag.Parse()
@@ -35,6 +36,7 @@ func main() {
 		fmt.Println("Examples:")
 		fmt.Println("  home-ci-diag -config=/path/to/config.yaml")
 		fmt.Println("  home-ci-diag -config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml -check-concurrency")
+		fmt.Println("  home-ci-diag -config=/path/to/config.yaml -show-timeline")
 		return
 	}
 
@@ -62,6 +64,8 @@ func main() {
 
 	if *checkConcurrencyFlag {
 		checkConcurrencyCompliance(repoPath, *configPathFlag)
+	} else if *showTimelineFlag {
+		showBranchTimelines(repoPath)
 	} else {
 		log.Printf("🔍 Diagnosing repository: %s", repoPath)
 		showBranchesWithTestResults(repoPath)
@@ -574,4 +578,190 @@ func analyzeConcurrency(testResults []TestResult) (int, []ConcurrencyViolation) 
 	}
 
 	return maxConcurrent, violations
+}
+
+// CommitInfo represents a commit with its timestamp
+type CommitInfo struct {
+	Hash      string
+	Date      time.Time
+	Message   string
+	Author    string
+	TestStart *time.Time
+	TestEnd   *time.Time
+	TestResult string // "success", "failure", "timeout", or ""
+}
+
+// TimelineEvent represents an event in the branch timeline
+type TimelineEvent struct {
+	Time        time.Time
+	Type        string // "commit", "test_start", "test_end"
+	CommitHash  string
+	Message     string
+	TestResult  string
+}
+
+// showBranchTimelines displays timeline of commits and tests for each branch
+func showBranchTimelines(repoPath string) {
+	fmt.Println("🕒 Branch Timelines - Commits and Tests")
+	fmt.Println("======================================")
+
+	branches := getGitBranches(repoPath)
+
+	// Get test results
+	testResults, err := readTestResults(repoPath)
+	if err != nil {
+		fmt.Printf("❌ Failed to read test results: %v\n", err)
+		return
+	}
+	testsByCommit := make(map[string]TestResult)
+	for _, result := range testResults {
+		testsByCommit[result.Commit] = result
+	}
+
+	for _, branch := range branches {
+		if strings.Contains(branch, "->") || strings.HasPrefix(branch, "remotes/") {
+			continue // Skip remote branch references
+		}
+
+		branch = strings.TrimSpace(strings.TrimPrefix(branch, "*"))
+		if branch == "" {
+			continue
+		}
+
+		fmt.Printf("\n📋 Branch: %s\n", branch)
+		fmt.Println("┌─────────────────────┬──────────┬─────────────────────┬─────────────────────┬────────────┬─────────────────────────────────────┐")
+		fmt.Println("│       Commit        │   Type   │    Commit Date      │     Test Start      │   Result   │               Message               │")
+		fmt.Println("├─────────────────────┼──────────┼─────────────────────┼─────────────────────┼────────────┼─────────────────────────────────────┤")
+
+		commits, err := getBranchCommits(repoPath, branch)
+		if err != nil {
+			fmt.Printf("❌ Failed to get commits for branch %s: %v\n", branch, err)
+			continue
+		}
+
+		// Create timeline events
+		var events []TimelineEvent
+
+		for _, commit := range commits {
+			// Add commit event
+			events = append(events, TimelineEvent{
+				Time:       commit.Date,
+				Type:       "commit",
+				CommitHash: commit.Hash,
+				Message:    commit.Message,
+			})
+
+			// Add test events if they exist
+			if test, exists := testsByCommit[commit.Hash]; exists {
+				events = append(events, TimelineEvent{
+					Time:       test.StartTime,
+					Type:       "test_start",
+					CommitHash: commit.Hash,
+					Message:    commit.Message,
+					TestResult: getTestResultString(test),
+				})
+				events = append(events, TimelineEvent{
+					Time:       test.EndTime,
+					Type:       "test_end",
+					CommitHash: commit.Hash,
+					Message:    commit.Message,
+					TestResult: getTestResultString(test),
+				})
+			}
+		}
+
+		// Sort events by time
+		sort.Slice(events, func(i, j int) bool {
+			return events[i].Time.Before(events[j].Time)
+		})
+
+		// Display events
+		for _, event := range events {
+			commitShort := event.CommitHash[:8]
+			timeStr := event.Time.Format("2006-01-02 15:04:05")
+			message := event.Message
+			if len(message) > 35 {
+				message = message[:32] + "..."
+			}
+
+			switch event.Type {
+			case "commit":
+				fmt.Printf("│ %s │ 📝 Commit │ %s │         -           │     -      │ %-35s │\n",
+					commitShort, timeStr, message)
+			case "test_start":
+				resultIcon := getResultIcon(event.TestResult)
+				fmt.Printf("│ %s │ 🚀 Start  │         -           │ %s │ %s %-8s │ Test started                        │\n",
+					commitShort, timeStr, resultIcon, event.TestResult)
+			case "test_end":
+				resultIcon := getResultIcon(event.TestResult)
+				fmt.Printf("│ %s │ 🏁 End    │         -           │ %s │ %s %-8s │ Test completed                      │\n",
+					commitShort, timeStr, resultIcon, event.TestResult)
+			}
+		}
+
+		fmt.Println("└─────────────────────┴──────────┴─────────────────────┴─────────────────────┴────────────┴─────────────────────────────────────┘")
+	}
+}
+
+// getBranchCommits gets commits for a specific branch
+func getBranchCommits(repoPath, branch string) ([]CommitInfo, error) {
+	cmd := exec.Command("git", "log", "--format=%H|%cd|%s|%an", "--date=iso", branch)
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var commits []CommitInfo
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "|")
+		if len(parts) < 4 {
+			continue
+		}
+
+		date, err := time.Parse("2006-01-02 15:04:05 -0700", parts[1])
+		if err != nil {
+			continue
+		}
+
+		commits = append(commits, CommitInfo{
+			Hash:    parts[0],
+			Date:    date,
+			Message: parts[2],
+			Author:  parts[3],
+		})
+	}
+
+	return commits, nil
+}
+
+// getResultIcon returns an icon for the test result
+func getResultIcon(result string) string {
+	switch result {
+	case "success":
+		return "✅"
+	case "failure":
+		return "❌"
+	case "timeout":
+		return "⏰"
+	default:
+		return "❓"
+	}
+}
+
+// getTestResultString returns a string representation of the test result
+func getTestResultString(test TestResult) string {
+	if test.TimedOut {
+		return "timeout"
+	} else if test.Success {
+		return "success"
+	} else {
+		return "failure"
+	}
 }
