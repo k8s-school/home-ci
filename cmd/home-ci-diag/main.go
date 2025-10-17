@@ -621,8 +621,10 @@ func showBranchTimelines(repoPath string, configPath string) {
 	fmt.Printf("ℹ️  Home-CI behavior explanation:\n")
 	fmt.Printf("   • Normal operation: Tests only the latest commit per branch\n")
 	fmt.Printf("   • Check interval: %s (how often home-ci scans for new commits)\n", checkInterval)
-	fmt.Printf("   • E2E testing: Multiple commits created rapidly may all be tested\n")
-	fmt.Printf("     before home-ci can update its state between check intervals\n")
+	fmt.Printf("   • Multiple tests per branch may occur when:\n")
+	fmt.Printf("     - Branches share common commits (Git's normal behavior)\n")
+	fmt.Printf("     - Home-CI detects previously untested commits in branch history\n")
+	fmt.Printf("     - E2E tests create complex branch hierarchies rapidly\n")
 	fmt.Println("")
 
 	branches := getGitBranches(repoPath)
