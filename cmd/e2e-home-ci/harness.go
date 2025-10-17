@@ -148,6 +148,12 @@ func (th *E2ETestHarness) simulateActivity() {
 		return
 	}
 
+	// Special handling for concurrent limit test
+	if th.testType == TestConcurrentLimit {
+		th.simulateConcurrentActivity()
+		return
+	}
+
 	log.Printf("🎯 Starting activity simulation for %v", th.duration)
 
 	ticker := time.NewTicker(45 * time.Second) // Create a commit every 45 seconds
@@ -171,6 +177,40 @@ func (th *E2ETestHarness) simulateActivity() {
 			branchIndex++
 		}
 	}
+}
+
+// simulateConcurrentActivity creates 4 commits on 4 different branches simultaneously
+// to test max_concurrent_runs=2 limitation
+func (th *E2ETestHarness) simulateConcurrentActivity() {
+	log.Printf("🎯 Starting concurrent limit test - creating 4 commits on 4 branches")
+
+	branches := []string{
+		"concurrent/test1",
+		"concurrent/test2",
+		"concurrent/test3",
+		"concurrent/test4",
+	}
+
+	commitMessages := []string{
+		"CONCURRENT_TEST: Test 1 - Should run in first batch",
+		"CONCURRENT_TEST: Test 2 - Should run in first batch",
+		"CONCURRENT_TEST: Test 3 - Should run in second batch",
+		"CONCURRENT_TEST: Test 4 - Should run in second batch",
+	}
+
+	// Create all commits quickly to trigger concurrent execution
+	log.Printf("📝 Creating commits on all branches...")
+	for i, branch := range branches {
+		if err := th.createCommitWithMessage(branch, commitMessages[i]); err != nil {
+			log.Printf("❌ Failed to create commit on %s: %v", branch, err)
+		} else {
+			log.Printf("✅ Created commit on %s", branch)
+		}
+		// Small delay to ensure commits have different timestamps
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	log.Printf("🏁 All concurrent test commits created")
 }
 
 // countTestsFromResults counts the number of tests by counting JSON result files

@@ -63,6 +63,8 @@ determine_test_behavior() {
         echo "timeout"
     elif [[ "$COMMIT_MESSAGE" =~ .*SUCCESS.* ]]; then
         echo "success"
+    elif [[ "$COMMIT_MESSAGE" =~ .*CONCURRENT_TEST.* ]]; then
+        echo "concurrent_test"
     else
         # Branch-based behavior (fallback)
         case "$BRANCH_NAME" in
@@ -164,6 +166,23 @@ case "$EXPECTED_BEHAVIOR" in
         done
 
         echo "✅ Test completed (should not reach here if timeout works)"
+        exit 0
+        ;;
+
+    "concurrent_test")
+        echo "🔄 Starting concurrent test..."
+        echo "⏳ Running 15-second test to observe concurrency..."
+
+        # Simulate test work for 15 seconds with progress updates
+        for i in {1..15}; do
+            echo "🔄 Concurrent test progress: $i/15 seconds"
+            sleep 1
+        done
+
+        echo "✅ Concurrent test completed"
+
+        # Create success marker file
+        echo "Concurrent test completed successfully" > "$DATA_DIR/${BRANCH_SAFE}-${COMMIT_HASH}_CONCURRENT_SUCCESS.txt"
         exit 0
         ;;
 esac

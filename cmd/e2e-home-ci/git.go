@@ -479,3 +479,49 @@ func (th *E2ETestHarness) createCommit(branch string) error {
 	log.Printf("✅ Created commit on %s: %s", branch, commitMsg)
 	return nil
 }
+
+// createCommitWithMessage creates a new commit on a branch with a custom message
+func (th *E2ETestHarness) createCommitWithMessage(branch, message string) error {
+	log.Printf("📝 Creating commit on branch %s with message: %s", branch, message)
+
+	// Check if the branch exists, if not create it
+	cmd := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	cmd.Dir = th.testRepoPath
+	if err := cmd.Run(); err != nil {
+		// The branch doesn't exist, create it
+		if err := th.runGitCommand("git", "checkout", "-b", branch); err != nil {
+			return fmt.Errorf("failed to create branch %s: %w", branch, err)
+		}
+		th.branchesCreated++
+		log.Printf("✅ Created new branch: %s", branch)
+	} else {
+		// The branch exists, switch to it
+		if err := th.runGitCommand("git", "checkout", branch); err != nil {
+			return fmt.Errorf("failed to checkout branch %s: %w", branch, err)
+		}
+	}
+
+	// Create or modify a file
+	safeBranchName := strings.ReplaceAll(branch, "/", "_")
+	filename := fmt.Sprintf("file_%s_%d.txt", safeBranchName, time.Now().Unix())
+	filePath := filepath.Join(th.testRepoPath, filename)
+	content := fmt.Sprintf("Content for %s at %s\nCommit message: %s\n", branch, time.Now().Format(time.RFC3339), message)
+
+	if err := os.WriteFile(filePath, []byte(content), filePerm); err != nil {
+		return fmt.Errorf("failed to create file %s: %w", filename, err)
+	}
+
+	// Add and commit
+	if err := th.runGitCommand("git", "add", filename); err != nil {
+		return fmt.Errorf("failed to add file: %w", err)
+	}
+
+	if err := th.runGitCommand("git", "commit", "-m", message); err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	th.commitsCreated++
+	log.Printf("✅ Created commit on %s: %s", branch, message)
+
+	return nil
+}

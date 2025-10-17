@@ -62,6 +62,8 @@ func (th *E2ETestHarness) getConfigForTestType() (string, string, string) {
 		return "config-quick.yaml", resources.ConfigQuick, "Quick"
 	case TestLong:
 		return "config-long.yaml", resources.ConfigLong, "Long"
+	case TestConcurrentLimit:
+		return "config-concurrent-limit.yaml", resources.ConfigConcurrentLimit, "Concurrent-Limit"
 	default: // TestNormal
 		return "config-normal.yaml", resources.ConfigNormal, "Normal"
 	}

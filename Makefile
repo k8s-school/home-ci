@@ -23,6 +23,7 @@ help:
 	@echo "  test-quick          Run multi-commit quick tests (30 seconds)"
 	@echo "  test-normal         Run normal integration tests (3 minutes)"
 	@echo "  test-long           Run extended integration tests (10 minutes)"
+	@echo "  test-concurrent-limit Test max_concurrent_runs=2 with 4 branches"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make build && make test"
@@ -103,6 +104,14 @@ test-normal: build
 test-long: build
 	@echo "🐌 Running extended integration tests..."
 	./e2e-home-ci -type=long -duration=10m
+
+# Run concurrent limit test
+test-concurrent-limit: build
+	@echo "⚡ Running concurrent limit test (max_concurrent_runs=2)..."
+	./e2e-home-ci -type=concurrent-limit
+	@echo ""
+	@echo "🔍 Verifying concurrency compliance:"
+	./home-ci-diag -config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml -check-concurrency
 
 # Clean build artifacts
 clean:

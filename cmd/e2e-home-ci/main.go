@@ -39,6 +39,7 @@ func main() {
 		fmt.Println("  dispatch-all         - Multi commit test with dispatch (4 test cases + dispatch)")
 		fmt.Println("  normal               - Multi branch integration test (default)")
 		fmt.Println("  long                 - Extended multi branch test (specified duration)")
+		fmt.Println("  concurrent-limit     - Test max_concurrent_runs=2 with 4 branches")
 		fmt.Println("")
 		fmt.Println("Examples:")
 		fmt.Println("  e2e-home-ci -type=success               # Single commit success test")
@@ -49,6 +50,7 @@ func main() {
 		fmt.Println("  e2e-home-ci -type=quick                 # Multi commit quick test")
 		fmt.Println("  e2e-home-ci -type=dispatch-all          # Multi commit test with dispatch")
 		fmt.Println("  e2e-home-ci -type=normal -duration=5m   # Multi branch integration test")
+		fmt.Println("  e2e-home-ci -type=concurrent-limit      # Test concurrent runs limit")
 		fmt.Println("  e2e-home-ci -init                       # Initialize e2e environment")
 		fmt.Println("  e2e-home-ci -type=timeout -no-cleanup   # Keep repos for debugging")
 		return
@@ -78,6 +80,8 @@ func main() {
 		if duration > 45*time.Second {
 			duration = 45 * time.Second // Longer for dispatch-all tests
 		}
+	case TestConcurrentLimit:
+		duration = 60 * time.Second // Fixed duration for concurrent limit tests
 	// TestNormal and TestLong use user-specified duration
 	}
 
