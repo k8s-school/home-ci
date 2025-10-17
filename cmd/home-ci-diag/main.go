@@ -64,8 +64,7 @@ func main() {
 		checkConcurrencyCompliance(repoPath, *configPathFlag)
 	} else {
 		log.Printf("🔍 Diagnosing repository: %s", repoPath)
-		showGitBranches(repoPath)
-		showProcessedCommits(repoPath)
+		showBranchesWithTestResults(repoPath)
 		showHomeciState(repoPath)
 	}
 }
@@ -122,6 +121,122 @@ func showProcessedCommits(repoPath string) {
 	}
 }
 
+// showBranchesWithTestResults displays git branches with their associated test results
+func showBranchesWithTestResults(repoPath string) {
+	fmt.Println("")
+	fmt.Println("📊 Git Branches with Test Results:")
+
+	// Get all branches
+	branches := getGitBranches(repoPath)
+
+	// Get all test results
+	testResults, err := readTestResults(repoPath)
+	if err != nil {
+		fmt.Printf("Error reading test results: %v\n", err)
+		return
+	}
+
+	// Group test results by branch
+	branchResults := make(map[string][]TestResult)
+	for _, result := range testResults {
+		branchResults[result.Branch] = append(branchResults[result.Branch], result)
+	}
+
+	// Display each branch with its test results
+	for _, branch := range branches {
+		fmt.Printf("\n🌿 %s\n", branch)
+
+		if results, exists := branchResults[branch]; exists {
+			// Sort results by start time (most recent first)
+			sort.Slice(results, func(i, j int) bool {
+				return results[i].StartTime.After(results[j].StartTime)
+			})
+
+			for _, result := range results {
+				status := "❌ FAILED"
+				if result.Success {
+					status = "✅ PASSED"
+				}
+
+				// Get commit message
+				commitMessage := getCommitMessage(repoPath, result.Commit)
+
+				duration := result.EndTime.Sub(result.StartTime)
+				fmt.Printf("   • Commit: %s\n", result.Commit)
+				if commitMessage != "" {
+					fmt.Printf("     Message: %s\n", commitMessage)
+				}
+				fmt.Printf("     Status: %s\n", status)
+				fmt.Printf("     Start:  %s\n", result.StartTime.Format("2006-01-02 15:04:05"))
+				fmt.Printf("     End:    %s\n", result.EndTime.Format("2006-01-02 15:04:05"))
+				fmt.Printf("     Duration: %s\n", duration.Round(time.Second))
+				if result.ErrorMessage != "" {
+					fmt.Printf("     Error: %s\n", result.ErrorMessage)
+				}
+				fmt.Println()
+			}
+		} else {
+			fmt.Println("   No test results found for this branch")
+		}
+	}
+}
+
+// getGitBranches returns a list of all git branches (local and remote)
+func getGitBranches(repoPath string) []string {
+	cmd := exec.Command("git", "branch", "-a")
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return []string{}
+	}
+
+	var branches []string
+	lines := strings.Split(string(output), "\n")
+	branchMap := make(map[string]bool) // To avoid duplicates
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "*") {
+			// Skip empty lines and current branch marker
+			if strings.HasPrefix(line, "*") {
+				line = strings.TrimSpace(line[1:]) // Remove the * marker
+			} else {
+				continue
+			}
+		}
+
+		// Handle remote branches: remove "remotes/origin/" prefix
+		if strings.HasPrefix(line, "remotes/origin/") {
+			line = strings.TrimPrefix(line, "remotes/origin/")
+		}
+
+		// Skip HEAD pointer
+		if strings.Contains(line, "HEAD ->") {
+			continue
+		}
+
+		if line != "" && !branchMap[line] {
+			branches = append(branches, line)
+			branchMap[line] = true
+		}
+	}
+
+	// Sort branches alphabetically
+	sort.Strings(branches)
+	return branches
+}
+
+// getCommitMessage returns the commit message for a given commit hash
+func getCommitMessage(repoPath, commitHash string) string {
+	cmd := exec.Command("git", "log", "--format=%s", "-n", "1", commitHash)
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
 // showHomeciState displays the current state of home-ci for this repository
 func showHomeciState(repoPath string) {
 	fmt.Println("")
@@ -148,12 +263,21 @@ type Config struct {
 
 // TestResult represents a test execution result
 type TestResult struct {
-	Branch    string    `json:"branch"`
-	Commit    string    `json:"commit"`
-	LogFile   string    `json:"log_file"`
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
-	Success   bool      `json:"success"`
+	Branch                    string        `json:"branch"`
+	Commit                    string        `json:"commit"`
+	LogFile                   string        `json:"log_file"`
+	StartTime                 time.Time     `json:"start_time"`
+	EndTime                   time.Time     `json:"end_time"`
+	Duration                  time.Duration `json:"duration"`
+	Success                   bool          `json:"success"`
+	TimedOut                  bool          `json:"timed_out"`
+	CleanupExecuted           bool          `json:"cleanup_executed"`
+	CleanupSuccess            bool          `json:"cleanup_success"`
+	GitHubActionsNotified     bool          `json:"github_actions_notified"`
+	GitHubActionsSuccess      bool          `json:"github_actions_success"`
+	ErrorMessage              string        `json:"error_message,omitempty"`
+	CleanupErrorMessage       string        `json:"cleanup_error_message,omitempty"`
+	GitHubActionsErrorMessage string        `json:"github_actions_error_message,omitempty"`
 }
 
 // TimeInterval represents a time interval for concurrency analysis

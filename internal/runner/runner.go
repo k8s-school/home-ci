@@ -97,16 +97,27 @@ func (tr *TestRunner) Start() {
 	slog.Debug("Starting test runner", "max_concurrent_runs", tr.config.MaxConcurrentRuns)
 
 	for job := range tr.testQueue {
-		go tr.executeTestJob(job)
+		// Acquire semaphore BEFORE launching goroutine to respect concurrency limit
+		tr.semaphore <- struct{}{}
+		go func(j TestJob) {
+			defer func() { <-tr.semaphore }() // Release when done
+			tr.executeTestJobWithoutSemaphore(j)
+		}(job)
 	}
 }
 
-// executeTestJob handles a single test job with concurrency control
+// executeTestJob handles a single test job with concurrency control (legacy method)
 func (tr *TestRunner) executeTestJob(job TestJob) {
 	// Acquire a slot in the semaphore
 	tr.semaphore <- struct{}{}
 	defer func() { <-tr.semaphore }() // Release the slot at the end
 
+	tr.executeTestJobWithoutSemaphore(job)
+}
+
+// executeTestJobWithoutSemaphore handles test execution without semaphore management
+// The semaphore is expected to be managed by the caller
+func (tr *TestRunner) executeTestJobWithoutSemaphore(job TestJob) {
 	slog.Debug("Starting tests", "branch", job.Branch, "commit", job.Commit[:8])
 
 	if err := tr.runTests(job.Branch, job.Commit); err != nil {
