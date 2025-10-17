@@ -81,7 +81,7 @@ func main() {
 			duration = 45 * time.Second // Longer for dispatch-all tests
 		}
 	case TestConcurrentLimit:
-		duration = 60 * time.Second // Fixed duration for concurrent limit tests
+		duration = 120 * time.Second // Fixed duration for concurrent limit tests (increased for proper concurrency)
 	// TestNormal and TestLong use user-specified duration
 	}
 
@@ -150,6 +150,9 @@ func main() {
 	} else if testType.isSingleCommitTest() {
 		log.Println("⏳ Waiting for single commit test to complete...")
 		time.Sleep(20 * time.Second) // Shorter wait for single commit tests
+	} else if testType == TestConcurrentLimit {
+		log.Println("⏳ Waiting for concurrent limit tests to complete...")
+		time.Sleep(60 * time.Second) // Longer wait for concurrent limit tests due to proper concurrency control
 	} else {
 		log.Println("⏳ Waiting for final tests to complete...")
 		time.Sleep(30 * time.Second)
