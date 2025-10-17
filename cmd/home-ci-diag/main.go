@@ -65,7 +65,7 @@ func main() {
 	if *checkConcurrencyFlag {
 		checkConcurrencyCompliance(repoPath, *configPathFlag)
 	} else if *showTimelineFlag {
-		showBranchTimelines(repoPath)
+		showBranchTimelines(repoPath, *configPathFlag)
 	} else {
 		log.Printf("🔍 Diagnosing repository: %s", repoPath)
 		showBranchesWithTestResults(repoPath)
@@ -601,9 +601,29 @@ type TimelineEvent struct {
 }
 
 // showBranchTimelines displays timeline of commits and tests for each branch
-func showBranchTimelines(repoPath string) {
+func showBranchTimelines(repoPath string, configPath string) {
 	fmt.Println("🕒 Branch Timelines - Commits and Tests")
 	fmt.Println("======================================")
+
+	// Read config to get check_interval
+	checkInterval := "unknown"
+	if configPath != "" {
+		if data, err := os.ReadFile(configPath); err == nil {
+			var rawConfig map[string]interface{}
+			if err := yaml.Unmarshal(data, &rawConfig); err == nil {
+				if ci, ok := rawConfig["check_interval"]; ok {
+					checkInterval = fmt.Sprintf("%v", ci)
+				}
+			}
+		}
+	}
+
+	fmt.Printf("ℹ️  Home-CI behavior explanation:\n")
+	fmt.Printf("   • Normal operation: Tests only the latest commit per branch\n")
+	fmt.Printf("   • Check interval: %s (how often home-ci scans for new commits)\n", checkInterval)
+	fmt.Printf("   • E2E testing: Multiple commits created rapidly may all be tested\n")
+	fmt.Printf("     before home-ci can update its state between check intervals\n")
+	fmt.Println("")
 
 	branches := getGitBranches(repoPath)
 
@@ -668,6 +688,11 @@ func showBranchTimelines(repoPath string) {
 					TestResult: getTestResultString(test),
 				})
 			}
+		}
+
+		// Skip branch if no events
+		if len(events) == 0 {
+			continue
 		}
 
 		// Sort events by time
