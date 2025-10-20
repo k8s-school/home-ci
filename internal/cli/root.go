@@ -8,16 +8,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/k8s-school/ciux/log"
 	"github.com/spf13/cobra"
 
 	"github.com/k8s-school/home-ci/internal/config"
+	"github.com/k8s-school/home-ci/internal/logging"
 	"github.com/k8s-school/home-ci/internal/monitor"
 )
 
 var (
 	configPath string
-	verbose    bool
+	verbose    int
 	keepTime   string
 )
 
@@ -27,12 +27,8 @@ var RootCmd = &cobra.Command{
 	Long: `A CI monitoring tool that watches git repositories for new commits
 and automatically runs tests when changes are detected.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Initialize logging with ciux/log which configures slog
-		verbosity := 0
-		if verbose {
-			verbosity = -10 // Debug level
-		}
-		log.Init(verbosity)
+		// Initialize logging
+		logging.InitLogging(verbose)
 
 		cfg, err := config.Load(configPath)
 		if err != nil {
@@ -69,6 +65,6 @@ and automatically runs tests when changes are detected.`,
 
 func init() {
 	RootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to configuration file")
-	RootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging (debug level)")
+	RootCmd.Flags().IntVarP(&verbose, "verbose", "v", 0, "Verbose level (0=error, 1=warn, 2=info, 3=debug)")
 	RootCmd.Flags().StringVar(&keepTime, "keep-time", "", "Keep cloned repositories for specified duration (e.g., '2h', '30m', '1h30m') before cleaning up")
 }

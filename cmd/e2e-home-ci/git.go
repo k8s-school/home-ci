@@ -53,6 +53,14 @@ func (th *E2ETestHarness) setupGitEnvironment() error {
 
 // configureGit configures git with necessary settings
 func (th *E2ETestHarness) configureGit() error {
+	// Remove any existing .git directory to ensure clean init
+	gitDir := filepath.Join(th.testRepoPath, ".git")
+	if _, err := os.Stat(gitDir); err == nil {
+		if err := os.RemoveAll(gitDir); err != nil {
+			return fmt.Errorf("failed to remove existing .git directory: %w", err)
+		}
+	}
+
 	commands := [][]string{
 		{"git", "init"},
 		{"git", "config", "user.name", gitUserName},
@@ -268,6 +276,10 @@ func (th *E2ETestHarness) createSingleCommitRepository() error {
 		commitMessage = "Single dispatch test commit"
 		fileName = "dispatch.txt"
 		content = "This commit should trigger GitHub Actions dispatch"
+	case TestDispatchNoTokenFile:
+		commitMessage = "Dispatch test without token file"
+		fileName = "dispatch-no-token.txt"
+		content = "This commit should trigger dispatch test without token file"
 	}
 
 	filePath := filepath.Join(th.testRepoPath, fileName)
@@ -409,14 +421,25 @@ func (th *E2ETestHarness) displayRepositoryState() {
 
 // runGitCommand executes a git command in the test repository
 func (th *E2ETestHarness) runGitCommand(args ...string) error {
+	if th.testRepoPath == "" {
+		return fmt.Errorf("testRepoPath is empty")
+	}
+
+	// Ensure the directory exists
+	if _, err := os.Stat(th.testRepoPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(th.testRepoPath, 0755); err != nil {
+			return fmt.Errorf("failed to create git working directory %s: %w", th.testRepoPath, err)
+		}
+	}
+
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = th.testRepoPath
 	cmd.Env = append(os.Environ(), fmt.Sprintf("GIT_PAGER=%s", gitPager))
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("Git command failed: %s\nOutput: %s", strings.Join(args, " "), string(output))
-		return err
+		log.Printf("Git command failed: %s\nOutput: %s\nWorking dir: %s", strings.Join(args, " "), string(output), th.testRepoPath)
+		return fmt.Errorf("git command failed: %s: %w", strings.Join(args, " "), err)
 	}
 	return nil
 }

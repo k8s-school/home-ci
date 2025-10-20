@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,29 +32,73 @@ func NewE2ETestHarness(testType TestType, duration time.Duration, noCleanup bool
 
 // writeFileFromResource writes an embedded resource to a file
 func (th *E2ETestHarness) writeFileFromResource(content, filePath string, executable bool) error {
+	if filePath == "" {
+		return fmt.Errorf("filePath is empty")
+	}
+	if content == "" {
+		return fmt.Errorf("content is empty for file %s", filePath)
+	}
+
+	slog.Debug("Writing file from resource", "filePath", filePath, "contentLength", len(content))
+
+	// Ensure the parent directory exists
+	parentDir := filepath.Dir(filePath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return fmt.Errorf("failed to create parent directory %s: %w", parentDir, err)
+	}
+
+	// Remove the file if it already exists (in case it's a directory or has wrong permissions)
+	if info, err := os.Stat(filePath); err == nil {
+		if info.IsDir() {
+			slog.Debug("Removing existing directory at file path", "filePath", filePath)
+			if err := os.RemoveAll(filePath); err != nil {
+				return fmt.Errorf("failed to remove existing directory %s: %w", filePath, err)
+			}
+		} else {
+			slog.Debug("Removing existing file", "filePath", filePath)
+			if err := os.Remove(filePath); err != nil {
+				return fmt.Errorf("failed to remove existing file %s: %w", filePath, err)
+			}
+		}
+	}
+
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-		return err
+		return fmt.Errorf("failed to write file %s: %w", filePath, err)
 	}
 
 	if executable {
-		return os.Chmod(filePath, 0755)
+		if err := os.Chmod(filePath, 0755); err != nil {
+			return fmt.Errorf("failed to make file executable %s: %w", filePath, err)
+		}
 	}
+
+	slog.Debug("Successfully wrote file", "filePath", filePath)
 	return nil
 }
 
 // setupTestRepo creates a test repository using the embedded setup script or manual setup
 func (th *E2ETestHarness) setupTestRepo() error {
 	if th.testType != TestTimeout {
-		log.Printf("🚀 Setting up test environment (%s)...", th.tempRunDir)
+		slog.Info("🚀 Setting up test environment", "dir", th.tempRunDir)
 	}
 
 	// Clean up and initialize the test type specific directory
 	if _, err := os.Stat(th.tempRunDir); err == nil {
 		if th.testType != TestTimeout {
-			log.Printf("Cleaning up existing test directory at %s", th.tempRunDir)
+			slog.Debug("Cleaning up existing test directory", "dir", th.tempRunDir)
 		}
 		if err := os.RemoveAll(th.tempRunDir); err != nil {
 			return fmt.Errorf("failed to remove existing test directory: %w", err)
+		}
+	}
+
+	// Also clean up the repository path specifically if it exists
+	if _, err := os.Stat(th.testRepoPath); err == nil {
+		if th.testType != TestTimeout {
+			slog.Debug("Cleaning up existing repository directory", "dir", th.testRepoPath)
+		}
+		if err := os.RemoveAll(th.testRepoPath); err != nil {
+			return fmt.Errorf("failed to remove existing repository directory: %w", err)
 		}
 	}
 
@@ -102,14 +147,14 @@ func (th *E2ETestHarness) setupTestRepo() error {
 		return fmt.Errorf("failed to initialize git repo: %w", err)
 	}
 
-	log.Printf("✅ Test repository created at %s", th.testRepoPath)
+	slog.Info("✅ Test repository created", "path", th.testRepoPath)
 	return nil
 }
 
 // startHomeCI starts home-ci with the appropriate configuration
 func (th *E2ETestHarness) startHomeCI(configPath string) error {
 	if th.testType != TestTimeout {
-		log.Println("🚀 Starting home-ci process...")
+		slog.Info( "🚀 Starting home-ci process...")
 	}
 
 	// Create a context with cancellation
@@ -132,7 +177,7 @@ func (th *E2ETestHarness) startHomeCI(configPath string) error {
 
 	if th.testType != TestTimeout {
 		logPath := filepath.Join(th.testRepoPath, ".home-ci")
-		log.Printf("✅ home-ci started with PID %d, logs will be in %s/", th.homeCIProcess.Process.Pid, logPath)
+		slog.Info("✅ home-ci started", "pid", th.homeCIProcess.Process.Pid, "logPath", logPath)
 	}
 
 	// Wait a bit for home-ci to start
@@ -144,7 +189,7 @@ func (th *E2ETestHarness) startHomeCI(configPath string) error {
 func (th *E2ETestHarness) simulateActivity() {
 	// Single commit tests don't need additional activity
 	if th.testType.isSingleCommitTest() {
-		log.Printf("📝 Single commit test (%s) - no additional activity needed", testTypeName[th.testType])
+		slog.Info("📝 Single commit test - no additional activity needed", "type", testTypeName[th.testType])
 		return
 	}
 
@@ -160,7 +205,7 @@ func (th *E2ETestHarness) simulateActivity() {
 		return
 	}
 
-	log.Printf("🎯 Starting activity simulation for %v", th.duration)
+	slog.Info("🎯 Starting activity simulation", "duration", th.duration)
 
 	ticker := time.NewTicker(45 * time.Second) // Create a commit every 45 seconds
 	defer ticker.Stop()
@@ -173,12 +218,12 @@ func (th *E2ETestHarness) simulateActivity() {
 	for {
 		select {
 		case <-timeout:
-			log.Println("⏰ Activity simulation completed")
+			slog.Info( "⏰ Activity simulation completed")
 			return
 		case <-ticker.C:
 			branch := branches[branchIndex%len(branches)]
 			if err := th.createCommit(branch); err != nil {
-				log.Printf("❌ Failed to create commit on %s: %v", branch, err)
+				slog.Info("❌ Failed to create commit", "branch", branch, "error", err)
 			}
 			branchIndex++
 		}
@@ -188,7 +233,7 @@ func (th *E2ETestHarness) simulateActivity() {
 // simulateConcurrentActivity creates 4 commits on 4 different branches simultaneously
 // to test max_concurrent_runs=2 limitation
 func (th *E2ETestHarness) simulateConcurrentActivity() {
-	log.Printf("🎯 Starting concurrent limit test - creating 4 commits on 4 branches")
+	slog.Info( "🎯 Starting concurrent limit test - creating 4 commits on 4 branches")
 
 	branches := []string{
 		"concurrent/test1",
@@ -205,24 +250,24 @@ func (th *E2ETestHarness) simulateConcurrentActivity() {
 	}
 
 	// Create all commits quickly to trigger concurrent execution
-	log.Printf("📝 Creating commits on all branches...")
+	slog.Info( "📝 Creating commits on all branches...")
 	for i, branch := range branches {
 		if err := th.createCommitWithMessage(branch, commitMessages[i]); err != nil {
-			log.Printf("❌ Failed to create commit on %s: %v", branch, err)
+			slog.Info("❌ Failed to create commit", "branch", branch, "error", err)
 		} else {
-			log.Printf("✅ Created commit on %s", branch)
+			slog.Debug("✅ Created commit", "branch", branch)
 		}
 		// Small delay to ensure commits have different timestamps
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	log.Printf("🏁 All concurrent test commits created")
+	slog.Info( "🏁 All concurrent test commits created")
 }
 
 // simulateContinuousActivity simulates continuous integration with variable commit timing
 // Tests max_concurrent_runs=3 with realistic developer workflow
 func (th *E2ETestHarness) simulateContinuousActivity() {
-	log.Printf("🎯 Starting continuous CI test - simulating active development")
+	slog.Info( "🎯 Starting continuous CI test - simulating active development")
 
 	// Start with existing branches with different commit types
 	initialBranches := map[string]string{
@@ -232,17 +277,17 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 	}
 
 	// Create initial commits
-	log.Printf("📝 Creating initial commits on existing branches...")
+	slog.Info( "📝 Creating initial commits on existing branches...")
 	for branch, message := range initialBranches {
 		if err := th.createCommitWithMessage(branch, message); err != nil {
-			log.Printf("❌ Failed to create initial commit on %s: %v", branch, err)
+			slog.Info("❌ Failed to create initial commit", "branch", branch, "error", err)
 		} else {
-			log.Printf("✅ Created initial commit on %s", branch)
+			slog.Debug("✅ Created initial commit", "branch", branch)
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	log.Printf("🎯 Starting continuous development simulation for %v", th.duration)
+	slog.Info("🎯 Starting continuous development simulation", "duration", th.duration)
 
 	// Variable timing: 8s, 12s, 6s, 15s, 10s, 7s
 	commitIntervals := []time.Duration{
@@ -276,7 +321,7 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 
 			select {
 			case <-timeout:
-				log.Printf("⏰ Continuous CI simulation completed (timeout)")
+				slog.Info( "⏰ Continuous CI simulation completed (timeout)")
 				return
 			case <-timer:
 				if commitIndex < len(commitPlans) {
