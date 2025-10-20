@@ -55,7 +55,10 @@ func main() {
 }
 
 func runInitialization() error {
-	testTypeVal := parseTestType(testType)
+	testTypeVal, err := parseTestType(testType)
+	if err != nil {
+		return err
+	}
 	th := NewE2ETestHarness(testTypeVal, 0, noCleanup)
 
 	slog.Info("Cleaning /tmp/home-ci/repos directory...")
@@ -79,7 +82,10 @@ func runInitialization() error {
 }
 
 func runE2ETests() error {
-	testTypeVal := parseTestType(testType)
+	testTypeVal, err := parseTestType(testType)
+	if err != nil {
+		return err
+	}
 
 	// Parse duration
 	durationVal, err := time.ParseDuration(duration)

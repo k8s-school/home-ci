@@ -56,37 +56,37 @@ build-diag:
 # Run integration tests (default duration)
 test: build
 	@echo "🧪 Running integration tests..."
-	./e2e-home-ci -type=normal -duration=3m
+	./e2e-home-ci --type=normal -duration=3m
 
 # Run single commit success test
 test-success: build
 	@echo "✅ Running success test..."
-	./e2e-home-ci -type=success
+	./e2e-home-ci --type=success
 
 # Run single commit failure test
 test-fail: build
 	@echo "❌ Running failure test..."
-	./e2e-home-ci -type=fail
+	./e2e-home-ci --type=fail
 
 # Run timeout validation test
 test-timeout: build
 	@echo "🕐 Running timeout validation test..."
-	./e2e-home-ci -type=timeout
+	./e2e-home-ci --type=timeout
 
 # Run single commit dispatch test
 test-dispatch-one-success: build
 	@echo "🚀 Running single commit dispatch test..."
-	./e2e-home-ci -type=dispatch-one-success
+	./e2e-home-ci --type=dispatch-one-success
 
 # Run single commit dispatch test with no token file
 test-dispatch-no-token-file: build
 	@echo "🚀 Running single commit dispatch test (no token file)..."
-	./e2e-home-ci -type=dispatch-no-token-file
+	./e2e-home-ci --type=dispatch-no-token-file
 
 # Run multi commit dispatch test
 test-dispatch-all: build
 	@echo "🚀 Running multi commit dispatch test..."
-	./e2e-home-ci -type=dispatch-all
+	./e2e-home-ci --type=dispatch-all
 	@echo ""
 	@echo "🔍 Repository diagnostic:"
 	./home-ci-diag -repo=/tmp/home-ci/e2e/dispatch-all/repo
@@ -94,22 +94,22 @@ test-dispatch-all: build
 # Run quick tests (4 commits)
 test-quick: build
 	@echo "⚡ Running quick integration tests..."
-	./e2e-home-ci -type=quick
+	./e2e-home-ci --type=quick
 
 # Run normal integration tests
 test-normal: build
 	@echo "🧪 Running normal integration tests..."
-	./e2e-home-ci -type=normal -duration=3m
+	./e2e-home-ci --type=normal -duration=3m
 
 # Run extended tests
 test-long: build
 	@echo "🐌 Running extended integration tests..."
-	./e2e-home-ci -type=long -duration=10m
+	./e2e-home-ci --type=long -duration=10m
 
 # Run concurrent limit test
 test-concurrent-limit: build
 	@echo "⚡ Running concurrent limit test (max_concurrent_runs=2)..."
-	./e2e-home-ci -type=concurrent-limit
+	./e2e-home-ci --type=concurrent-limit
 	@echo ""
 	@echo "🔍 Verifying concurrency compliance:"
 	./home-ci-diag -config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml -check-concurrency
@@ -117,7 +117,7 @@ test-concurrent-limit: build
 # Run continuous integration test
 test-continuous-ci: build
 	@echo "🔄 Running continuous integration test (max_concurrent_runs=3)..."
-	./e2e-home-ci -type=continuous-ci
+	./e2e-home-ci --type=continuous-ci
 	@echo ""
 	@echo "🔍 Verifying continuous integration compliance:"
 	./home-ci-diag -config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml -check-concurrency

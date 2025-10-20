@@ -122,30 +122,32 @@ type ValidationResult struct {
 }
 
 // parseTestType parses test type from string
-func parseTestType(s string) TestType {
+func parseTestType(s string) (TestType, error) {
 	switch s {
 	case "success":
-		return TestSuccess
+		return TestSuccess, nil
 	case "fail":
-		return TestFail
+		return TestFail, nil
 	case "timeout":
-		return TestTimeout
+		return TestTimeout, nil
 	case "dispatch-one-success":
-		return TestDispatchOneSuccess
+		return TestDispatchOneSuccess, nil
 	case "dispatch-no-token-file":
-		return TestDispatchNoTokenFile
+		return TestDispatchNoTokenFile, nil
 	case "dispatch-all":
-		return TestDispatchAll
+		return TestDispatchAll, nil
 	case "quick":
-		return TestQuick
+		return TestQuick, nil
+	case "normal":
+		return TestNormal, nil
 	case "long":
-		return TestLong
+		return TestLong, nil
 	case "concurrent-limit":
-		return TestConcurrentLimit
+		return TestConcurrentLimit, nil
 	case "continuous-ci":
-		return TestContinuousCI
+		return TestContinuousCI, nil
 	default:
-		return TestNormal
+		return TestNormal, fmt.Errorf("unsupported test type '%s'. Valid types are: success, fail, timeout, dispatch-one-success, dispatch-no-token-file, dispatch-all, quick, normal, long, concurrent-limit, continuous-ci", s)
 	}
 }
 
