@@ -87,7 +87,7 @@ jobs:
         chmod +x home-ci-e2e
 
     - name: Run success test
-      run: ./home-ci-e2e -type=success
+      run: ./home-ci-e2e --type=success
 
   test-fail:
     runs-on: ubuntu-latest
@@ -111,7 +111,7 @@ jobs:
         chmod +x home-ci-e2e
 
     - name: Run fail test
-      run: ./home-ci-e2e -type=fail
+      run: ./home-ci-e2e --type=fail
 
   test-quick:
     runs-on: ubuntu-latest
@@ -135,7 +135,7 @@ jobs:
         chmod +x home-ci-e2e
 
     - name: Run quick tests
-      run: ./home-ci-e2e -type=quick
+      run: ./home-ci-e2e --type=quick
 
   test-normal:
     runs-on: ubuntu-latest
@@ -159,7 +159,7 @@ jobs:
         chmod +x home-ci-e2e
 
     - name: Run normal tests
-      run: ./home-ci-e2e -type=normal -duration=2m
+      run: ./home-ci-e2e --type=normal --duration=2m
 
   test-long:
     runs-on: ubuntu-latest
@@ -184,7 +184,7 @@ jobs:
         chmod +x home-ci-e2e
 
     - name: Run long tests
-      run: ./home-ci-e2e -type=long -duration=5m
+      run: ./home-ci-e2e --type=long --duration=5m
 
   test-timeout:
     runs-on: ubuntu-latest
@@ -208,7 +208,7 @@ jobs:
         chmod +x home-ci-e2e
 
     - name: Run timeout tests
-      run: ./home-ci-e2e -type=timeout
+      run: ./home-ci-e2e --type=timeout
 
   test-dispatch-one-success:
     runs-on: ubuntu-latest
@@ -237,7 +237,7 @@ jobs:
         echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-one-success/secret.yaml
 
     - name: Run dispatch-one-success tests
-      run: ./home-ci-e2e -type=dispatch-one-success
+      run: ./home-ci-e2e --type=dispatch-one-success
 
   test-dispatch-all:
     runs-on: ubuntu-latest
@@ -266,7 +266,7 @@ jobs:
         echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-all/secret.yaml
 
     - name: Run dispatch-all tests
-      run: ./home-ci-e2e -type=dispatch-all
+      run: ./home-ci-e2e --type=dispatch-all
 
   test-dispatch-no-token-file:
     runs-on: ubuntu-latest
@@ -290,7 +290,7 @@ jobs:
         chmod +x home-ci-e2e
 
     - name: Run dispatch-no-token-file tests
-      run: ./home-ci-e2e -type=dispatch-no-token-file
+      run: ./home-ci-e2e --type=dispatch-no-token-file
 
   test-concurrent-limit:
     runs-on: ubuntu-latest
@@ -320,10 +320,10 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run concurrent-limit tests
-      run: ./home-ci-e2e -type=concurrent-limit
+      run: ./home-ci-e2e --type=concurrent-limit
 
     - name: Verify concurrency compliance
-      run: ./home-ci-diag -config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml -check-concurrency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml --check-concurrency
 
   test-continuous-ci:
     runs-on: ubuntu-latest
@@ -353,7 +353,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run continuous-ci tests
-      run: ./home-ci-e2e -type=continuous-ci
+      run: ./home-ci-e2e --type=continuous-ci
 
     - name: Verify continuous integration compliance
-      run: ./home-ci-diag -config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml -check-concurrency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-concurrency
