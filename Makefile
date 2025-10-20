@@ -57,70 +57,118 @@ build-diag:
 test: build
 	@echo "🧪 Running integration tests..."
 	./home-ci-e2e --type=normal -duration=3m
+	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-timeline
+	@echo ""
+	@echo "🔍 Verifying concurrency compliance:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-concurrency
 
 # Run single commit success test
 test-success: build
 	@echo "✅ Running success test..."
 	./home-ci-e2e --type=success
+	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/success/config-success.yaml --check-timeline
 
 # Run single commit failure test
 test-fail: build
 	@echo "❌ Running failure test..."
 	./home-ci-e2e --type=fail
+	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/fail/config-fail.yaml --check-timeline
 
 # Run timeout validation test
 test-timeout: build
 	@echo "🕐 Running timeout validation test..."
 	./home-ci-e2e --type=timeout
+	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/timeout/config-timeout.yaml --check-timeline
 
 # Run single commit dispatch test
 test-dispatch-one-success: build
 	@echo "🚀 Running single commit dispatch test..."
 	./home-ci-e2e --type=dispatch-one-success
+	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-one-success/config-dispatch-one-success.yaml --check-timeline
 
 # Run single commit dispatch test with no token file
 test-dispatch-no-token-file: build
 	@echo "🚀 Running single commit dispatch test (no token file)..."
 	./home-ci-e2e --type=dispatch-no-token-file
+	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-no-token-file/config-dispatch-no-token-file.yaml --check-timeline
 
 # Run multi commit dispatch test
 test-dispatch-all: build
 	@echo "🚀 Running multi commit dispatch test..."
 	./home-ci-e2e --type=dispatch-all
 	@echo ""
-	@echo "🔍 Repository diagnostic:"
-	./home-ci-diag -repo=/tmp/home-ci/e2e/dispatch-all/repo
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-all/config-dispatch-all.yaml --check-timeline
+	@echo ""
+	@echo "🔍 Verifying concurrency compliance:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-all/config-dispatch-all.yaml --check-concurrency
 
 # Run quick tests (4 commits)
 test-quick: build
 	@echo "⚡ Running quick integration tests..."
 	./home-ci-e2e --type=quick
+	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/quick/config-quick.yaml --check-timeline
+	@echo ""
+	@echo "🔍 Verifying concurrency compliance:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/quick/config-quick.yaml --check-concurrency
 
 # Run normal integration tests
 test-normal: build
 	@echo "🧪 Running normal integration tests..."
 	./home-ci-e2e --type=normal -duration=3m
+	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-timeline
+	@echo ""
+	@echo "🔍 Verifying concurrency compliance:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-concurrency
 
 # Run extended tests
 test-long: build
 	@echo "🐌 Running extended integration tests..."
 	./home-ci-e2e --type=long -duration=10m
+	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/long/config-long.yaml --check-timeline
+	@echo ""
+	@echo "🔍 Verifying concurrency compliance:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/long/config-long.yaml --check-concurrency
 
 # Run concurrent limit test
 test-concurrent-limit: build
 	@echo "⚡ Running concurrent limit test (max_concurrent_runs=2)..."
 	./home-ci-e2e --type=concurrent-limit
 	@echo ""
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml --check-timeline
+	@echo ""
 	@echo "🔍 Verifying concurrency compliance:"
-	./home-ci-diag -config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml -check-concurrency
+	./home-ci-diag --config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml --check-concurrency
 
 # Run continuous integration test
 test-continuous-ci: build
 	@echo "🔄 Running continuous integration test (max_concurrent_runs=3)..."
 	./home-ci-e2e --type=continuous-ci
 	@echo ""
-	@echo "🔍 Verifying continuous integration compliance:"
-	./home-ci-diag -config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml -check-concurrency
+	@echo "🔍 Verifying workflow consistency:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-timeline
+	@echo ""
+	@echo "🔍 Verifying concurrency compliance:"
+	./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-concurrency
 
 # Clean build artifacts
 clean:

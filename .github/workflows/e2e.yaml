@@ -81,218 +81,29 @@ jobs:
       with:
         name: home-ci-e2e-binary
 
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
     - name: Make binaries executable
       run: |
         chmod +x home-ci
         chmod +x home-ci-e2e
+        chmod +x home-ci-diag
 
     - name: Run success test
       run: ./home-ci-e2e --type=success
 
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/success/config-success.yaml --check-timeline
+
   test-fail:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download home-ci binary
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-binary
-
-    - name: Download e2e test harness
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-e2e-binary
-
-    - name: Make binaries executable
-      run: |
-        chmod +x home-ci
-        chmod +x home-ci-e2e
-
-    - name: Run fail test
-      run: ./home-ci-e2e --type=fail
-
-  test-quick:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download home-ci binary
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-binary
-
-    - name: Download e2e test harness
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-e2e-binary
-
-    - name: Make binaries executable
-      run: |
-        chmod +x home-ci
-        chmod +x home-ci-e2e
-
-    - name: Run quick tests
-      run: ./home-ci-e2e --type=quick
-
-  test-normal:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download home-ci binary
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-binary
-
-    - name: Download e2e test harness
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-e2e-binary
-
-    - name: Make binaries executable
-      run: |
-        chmod +x home-ci
-        chmod +x home-ci-e2e
-
-    - name: Run normal tests
-      run: ./home-ci-e2e --type=normal --duration=2m
-
-  test-long:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download home-ci binary
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-binary
-
-    - name: Download e2e test harness
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-e2e-binary
-
-    - name: Make binaries executable
-      run: |
-        chmod +x home-ci
-        chmod +x home-ci-e2e
-
-    - name: Run long tests
-      run: ./home-ci-e2e --type=long --duration=5m
-
-  test-timeout:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download home-ci binary
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-binary
-
-    - name: Download e2e test harness
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-e2e-binary
-
-    - name: Make binaries executable
-      run: |
-        chmod +x home-ci
-        chmod +x home-ci-e2e
-
-    - name: Run timeout tests
-      run: ./home-ci-e2e --type=timeout
-
-  test-dispatch-one-success:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download home-ci binary
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-binary
-
-    - name: Download e2e test harness
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-e2e-binary
-
-    - name: Make binaries executable
-      run: |
-        chmod +x home-ci
-        chmod +x home-ci-e2e
-
-    - name: Create secret.yaml for dispatch
-      run: |
-        mkdir -p /tmp/home-ci/e2e/dispatch-one-success
-        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-one-success/secret.yaml
-
-    - name: Run dispatch-one-success tests
-      run: ./home-ci-e2e --type=dispatch-one-success
-
-  test-dispatch-all:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download home-ci binary
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-binary
-
-    - name: Download e2e test harness
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-e2e-binary
-
-    - name: Make binaries executable
-      run: |
-        chmod +x home-ci
-        chmod +x home-ci-e2e
-
-    - name: Create secret.yaml for dispatch
-      run: |
-        mkdir -p /tmp/home-ci/e2e/dispatch-all
-        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-all/secret.yaml
-
-    - name: Run dispatch-all tests
-      run: ./home-ci-e2e --type=dispatch-all
-
-  test-dispatch-no-token-file:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download home-ci binary
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-binary
-
-    - name: Download e2e test harness
-      uses: actions/download-artifact@v4
-      with:
-        name: home-ci-e2e-binary
-
-    - name: Make binaries executable
-      run: |
-        chmod +x home-ci
-        chmod +x home-ci-e2e
-
-    - name: Run dispatch-no-token-file tests
-      run: ./home-ci-e2e --type=dispatch-no-token-file
-
-  test-concurrent-limit:
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -319,8 +130,303 @@ jobs:
         chmod +x home-ci-e2e
         chmod +x home-ci-diag
 
+    - name: Run fail test
+      run: ./home-ci-e2e --type=fail
+
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/fail/config-fail.yaml --check-timeline
+
+  test-quick:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-e2e-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x home-ci-e2e
+        chmod +x home-ci-diag
+
+    - name: Run quick tests
+      run: ./home-ci-e2e --type=quick
+
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/quick/config-quick.yaml --check-timeline
+
+    - name: Verify concurrency compliance
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/quick/config-quick.yaml --check-concurrency
+
+  test-normal:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-e2e-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x home-ci-e2e
+        chmod +x home-ci-diag
+
+    - name: Run normal tests
+      run: ./home-ci-e2e --type=normal --duration=2m
+
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-timeline
+
+    - name: Verify concurrency compliance
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-concurrency
+
+  test-long:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-e2e-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x home-ci-e2e
+        chmod +x home-ci-diag
+
+    - name: Run long tests
+      run: ./home-ci-e2e --type=long --duration=5m
+
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/long/config-long.yaml --check-timeline
+
+    - name: Verify concurrency compliance
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/long/config-long.yaml --check-concurrency
+
+  test-timeout:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-e2e-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x home-ci-e2e
+        chmod +x home-ci-diag
+
+    - name: Run timeout tests
+      run: ./home-ci-e2e --type=timeout
+
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/timeout/config-timeout.yaml --check-timeline
+
+  test-dispatch-one-success:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-e2e-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x home-ci-e2e
+        chmod +x home-ci-diag
+
+    - name: Create secret.yaml for dispatch
+      run: |
+        mkdir -p /tmp/home-ci/e2e/dispatch-one-success
+        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-one-success/secret.yaml
+
+    - name: Run dispatch-one-success tests
+      run: ./home-ci-e2e --type=dispatch-one-success
+
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-one-success/config-dispatch-one-success.yaml --check-timeline
+
+  test-dispatch-all:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-e2e-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x home-ci-e2e
+        chmod +x home-ci-diag
+
+    - name: Create secret.yaml for dispatch
+      run: |
+        mkdir -p /tmp/home-ci/e2e/dispatch-all
+        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-all/secret.yaml
+
+    - name: Run dispatch-all tests
+      run: ./home-ci-e2e --type=dispatch-all
+
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-all/config-dispatch-all.yaml --check-timeline
+
+    - name: Verify concurrency compliance
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-all/config-dispatch-all.yaml --check-concurrency
+
+  test-dispatch-no-token-file:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-e2e-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x home-ci-e2e
+        chmod +x home-ci-diag
+
+    - name: Run dispatch-no-token-file tests
+      run: ./home-ci-e2e --type=dispatch-no-token-file
+
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-no-token-file/config-dispatch-no-token-file.yaml --check-timeline
+
+  test-concurrent-limit:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Download e2e test harness
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-e2e-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x home-ci-e2e
+        chmod +x home-ci-diag
+
     - name: Run concurrent-limit tests
       run: ./home-ci-e2e --type=concurrent-limit
+
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml --check-timeline
 
     - name: Verify concurrency compliance
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml --check-concurrency
@@ -346,6 +452,11 @@ jobs:
       with:
         name: home-ci-diag-binary
 
+    - name: Download diagnostics tool
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-diag-binary
+
     - name: Make binaries executable
       run: |
         chmod +x home-ci
@@ -355,5 +466,8 @@ jobs:
     - name: Run continuous-ci tests
       run: ./home-ci-e2e --type=continuous-ci
 
-    - name: Verify continuous integration compliance
+    - name: Verify workflow consistency
+      run: ./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-timeline
+
+    - name: Verify concurrency compliance
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-concurrency
