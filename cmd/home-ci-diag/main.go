@@ -18,10 +18,10 @@ import (
 )
 
 var (
-	configPath      string
+	configPath       string
 	checkConcurrency bool
-	showTimeline    bool
-	verbose         int
+	showTimeline     bool
+	verbose          int
 )
 
 var rootCmd = &cobra.Command{
@@ -542,9 +542,9 @@ func analyzeConcurrency(testResults []TestResult) (int, []ConcurrencyViolation) 
 
 	// Create events for start and end times
 	type Event struct {
-		Time  time.Time
-		Type  string // "start" or "end"
-		Test  string // branch-commit for identification
+		Time time.Time
+		Type string // "start" or "end"
+		Test string // branch-commit for identification
 	}
 
 	var events []Event
@@ -593,22 +593,22 @@ func analyzeConcurrency(testResults []TestResult) (int, []ConcurrencyViolation) 
 
 // CommitInfo represents a commit with its timestamp
 type CommitInfo struct {
-	Hash      string
-	Date      time.Time
-	Message   string
-	Author    string
-	TestStart *time.Time
-	TestEnd   *time.Time
+	Hash       string
+	Date       time.Time
+	Message    string
+	Author     string
+	TestStart  *time.Time
+	TestEnd    *time.Time
 	TestResult string // "success", "failure", "timeout", or ""
 }
 
 // TimelineEvent represents an event in the branch timeline
 type TimelineEvent struct {
-	Time        time.Time
-	Type        string // "commit", "test_start", "test_end"
-	CommitHash  string
-	Message     string
-	TestResult  string
+	Time       time.Time
+	Type       string // "commit", "test_start", "test_end"
+	CommitHash string
+	Message    string
+	TestResult string
 }
 
 // showBranchTimelines displays timeline of commits and tests for each branch
@@ -630,10 +630,10 @@ func showBranchTimelines(repoPath string, configPath string) {
 	}
 
 	fmt.Printf("ℹ️  Home-CI behavior:\n")
-	fmt.Printf("   • Tests only the latest commit per branch (as designed)\n")
+	fmt.Printf("   • Tests commits based on check_interval timing\n")
 	fmt.Printf("   • Check interval: %s (frequency of commit scanning)\n", checkInterval)
-	fmt.Printf("   • Timeline shows: all commits + tests of latest commit only\n")
-	fmt.Printf("   • Branches may share commit history, but each test targets one branch\n")
+	fmt.Printf("   • Timeline shows: all commits + all tests found\n")
+	fmt.Printf("   • Multiple tests per branch possible if commits spaced by >check_interval\n")
 	fmt.Println("")
 
 	branches := getGitBranches(repoPath)
@@ -644,9 +644,13 @@ func showBranchTimelines(repoPath string, configPath string) {
 		fmt.Printf("❌ Failed to read test results: %v\n", err)
 		return
 	}
+	slog.Debug("Read test results", "count", len(testResults))
 	testsByCommit := make(map[string]TestResult)
+	testsByBranch := make(map[string][]TestResult)
 	for _, result := range testResults {
 		testsByCommit[result.Commit] = result
+		testsByBranch[result.Branch] = append(testsByBranch[result.Branch], result)
+		slog.Debug("Found test", "branch", result.Branch, "commit", result.Commit[:8], "success", result.Success)
 	}
 
 	for _, branch := range branches {
@@ -664,48 +668,43 @@ func showBranchTimelines(repoPath string, configPath string) {
 		fmt.Println("│       Commit        │    Type   │        Date         │   Result    │               Message               │")
 		fmt.Println("├─────────────────────┼───────────┼─────────────────────┼─────────────┼─────────────────────────────────────┤")
 
-		commits, err := getBranchCommits(repoPath, branch)
-		if err != nil {
-			fmt.Printf("❌ Failed to get commits for branch %s: %v\n", branch, err)
-			continue
-		}
-
-		// Create timeline events
+		// Create timeline events - show only tested commits for this branch
 		var events []TimelineEvent
+		branchTests := testsByBranch[branch]
+		slog.Debug("Processing branch", "branch", branch, "testsFound", len(branchTests))
 
-		// Get the latest commit for this branch
-		latestCommit := ""
-		if len(commits) > 0 {
-			latestCommit = commits[0].Hash // First commit is the latest (most recent)
-		}
+		// For each test found for this branch, get the commit info and add events
+		for _, test := range branchTests {
+			// Get commit info for this test
+			commitInfo, err := getCommitInfo(repoPath, test.Commit)
+			if err != nil {
+				slog.Debug("Failed to get commit info", "commit", test.Commit, "error", err)
+				continue
+			}
 
-		for _, commit := range commits {
 			// Add commit event
 			events = append(events, TimelineEvent{
-				Time:       commit.Date,
+				Time:       commitInfo.Date,
 				Type:       "commit",
-				CommitHash: commit.Hash,
-				Message:    commit.Message,
+				CommitHash: test.Commit,
+				Message:    commitInfo.Message,
 			})
 
-			// Add test events only if this commit was actually tested for THIS branch
-			// (only the latest commit should have been tested by home-ci)
-			if test, exists := testsByCommit[commit.Hash]; exists && commit.Hash == latestCommit {
-				events = append(events, TimelineEvent{
-					Time:       test.StartTime,
-					Type:       "test_start",
-					CommitHash: commit.Hash,
-					Message:    commit.Message,
-					TestResult: getTestResultString(test),
-				})
-				events = append(events, TimelineEvent{
-					Time:       test.EndTime,
-					Type:       "test_end",
-					CommitHash: commit.Hash,
-					Message:    commit.Message,
-					TestResult: getTestResultString(test),
-				})
-			}
+			// Add test events
+			events = append(events, TimelineEvent{
+				Time:       test.StartTime,
+				Type:       "test_start",
+				CommitHash: test.Commit,
+				Message:    commitInfo.Message,
+				TestResult: getTestResultString(test),
+			})
+			events = append(events, TimelineEvent{
+				Time:       test.EndTime,
+				Type:       "test_end",
+				CommitHash: test.Commit,
+				Message:    commitInfo.Message,
+				TestResult: getTestResultString(test),
+			})
 		}
 
 		// Skip branch if no events
@@ -782,6 +781,38 @@ func getBranchCommits(repoPath, branch string) ([]CommitInfo, error) {
 	}
 
 	return commits, nil
+}
+
+// getCommitInfo gets information for a specific commit
+func getCommitInfo(repoPath, commitHash string) (CommitInfo, error) {
+	cmd := exec.Command("git", "log", "--format=%H|%cd|%s|%an", "--date=iso", "-1", commitHash)
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return CommitInfo{}, err
+	}
+
+	line := strings.TrimSpace(string(output))
+	if line == "" {
+		return CommitInfo{}, fmt.Errorf("no output for commit %s", commitHash)
+	}
+
+	parts := strings.Split(line, "|")
+	if len(parts) < 4 {
+		return CommitInfo{}, fmt.Errorf("invalid git log output for commit %s", commitHash)
+	}
+
+	date, err := time.Parse("2006-01-02 15:04:05 -0700", parts[1])
+	if err != nil {
+		return CommitInfo{}, fmt.Errorf("failed to parse date for commit %s: %w", commitHash, err)
+	}
+
+	return CommitInfo{
+		Hash:    parts[0],
+		Date:    date,
+		Message: parts[2],
+		Author:  parts[3],
+	}, nil
 }
 
 // getResultIcon returns an icon for the test result
