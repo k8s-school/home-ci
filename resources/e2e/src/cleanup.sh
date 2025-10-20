@@ -2,7 +2,7 @@
 set -e
 
 # E2E tests always use the standardized data directory
-DATA_DIR="/tmp/e2e-home-ci/data"
+DATA_DIR="/tmp/home-ci-e2e/data"
 
 echo "=== E2E Cleanup Script ==="
 echo "Scanning for data files in: $DATA_DIR"

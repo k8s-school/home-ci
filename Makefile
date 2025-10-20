@@ -44,8 +44,8 @@ build-home-ci:
 # Build the e2e test harness
 build-e2e:
 	@echo "🏗️  Building e2e test harness..."
-	go build -o e2e-home-ci ./cmd/e2e-home-ci
-	@echo "✅ Build complete: ./e2e-home-ci"
+	go build -o home-ci-e2e ./cmd/home-ci-e2e
+	@echo "✅ Build complete: ./home-ci-e2e"
 
 # Build the diagnostics tool
 build-diag:
@@ -56,37 +56,37 @@ build-diag:
 # Run integration tests (default duration)
 test: build
 	@echo "🧪 Running integration tests..."
-	./e2e-home-ci --type=normal -duration=3m
+	./home-ci-e2e --type=normal -duration=3m
 
 # Run single commit success test
 test-success: build
 	@echo "✅ Running success test..."
-	./e2e-home-ci --type=success
+	./home-ci-e2e --type=success
 
 # Run single commit failure test
 test-fail: build
 	@echo "❌ Running failure test..."
-	./e2e-home-ci --type=fail
+	./home-ci-e2e --type=fail
 
 # Run timeout validation test
 test-timeout: build
 	@echo "🕐 Running timeout validation test..."
-	./e2e-home-ci --type=timeout
+	./home-ci-e2e --type=timeout
 
 # Run single commit dispatch test
 test-dispatch-one-success: build
 	@echo "🚀 Running single commit dispatch test..."
-	./e2e-home-ci --type=dispatch-one-success
+	./home-ci-e2e --type=dispatch-one-success
 
 # Run single commit dispatch test with no token file
 test-dispatch-no-token-file: build
 	@echo "🚀 Running single commit dispatch test (no token file)..."
-	./e2e-home-ci --type=dispatch-no-token-file
+	./home-ci-e2e --type=dispatch-no-token-file
 
 # Run multi commit dispatch test
 test-dispatch-all: build
 	@echo "🚀 Running multi commit dispatch test..."
-	./e2e-home-ci --type=dispatch-all
+	./home-ci-e2e --type=dispatch-all
 	@echo ""
 	@echo "🔍 Repository diagnostic:"
 	./home-ci-diag -repo=/tmp/home-ci/e2e/dispatch-all/repo
@@ -94,22 +94,22 @@ test-dispatch-all: build
 # Run quick tests (4 commits)
 test-quick: build
 	@echo "⚡ Running quick integration tests..."
-	./e2e-home-ci --type=quick
+	./home-ci-e2e --type=quick
 
 # Run normal integration tests
 test-normal: build
 	@echo "🧪 Running normal integration tests..."
-	./e2e-home-ci --type=normal -duration=3m
+	./home-ci-e2e --type=normal -duration=3m
 
 # Run extended tests
 test-long: build
 	@echo "🐌 Running extended integration tests..."
-	./e2e-home-ci --type=long -duration=10m
+	./home-ci-e2e --type=long -duration=10m
 
 # Run concurrent limit test
 test-concurrent-limit: build
 	@echo "⚡ Running concurrent limit test (max_concurrent_runs=2)..."
-	./e2e-home-ci --type=concurrent-limit
+	./home-ci-e2e --type=concurrent-limit
 	@echo ""
 	@echo "🔍 Verifying concurrency compliance:"
 	./home-ci-diag -config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml -check-concurrency
@@ -117,7 +117,7 @@ test-concurrent-limit: build
 # Run continuous integration test
 test-continuous-ci: build
 	@echo "🔄 Running continuous integration test (max_concurrent_runs=3)..."
-	./e2e-home-ci --type=continuous-ci
+	./home-ci-e2e --type=continuous-ci
 	@echo ""
 	@echo "🔍 Verifying continuous integration compliance:"
 	./home-ci-diag -config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml -check-concurrency
@@ -126,7 +126,7 @@ test-continuous-ci: build
 clean:
 	@echo "🧹 Cleaning build artifacts..."
 	rm -f home-ci
-	rm -f e2e-home-ci
+	rm -f home-ci-e2e
 	rm -f home-ci-diag
 	@echo "✅ Clean complete"
 	@echo "💾 Test data preserved in /tmp/home-ci/e2e/*/data/"
@@ -135,7 +135,7 @@ clean:
 clean-all:
 	@echo "🧹 Cleaning all build artifacts and test environments..."
 	rm -f home-ci
-	rm -f e2e-home-ci
+	rm -f home-ci-e2e
 	rm -f home-ci-diag
 	rm -rf /tmp/home-ci/e2e/
 	rm -rf /tmp/test-repo-home-ci

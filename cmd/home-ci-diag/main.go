@@ -2,9 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,64 +11,74 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+
+	"github.com/k8s-school/home-ci/internal/logging"
 )
 
+var (
+	configPath      string
+	checkConcurrency bool
+	showTimeline    bool
+	verbose         int
+)
+
+var rootCmd = &cobra.Command{
+	Use:   "home-ci-diag",
+	Short: "Home-CI Repository Diagnostic Tool",
+	Long: `A diagnostic tool for analyzing Home-CI test results and repository state.
+Provides insights into test execution, concurrency compliance, and branch timelines.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Initialize logging
+		logging.InitLogging(verbose)
+
+		if configPath == "" {
+			return fmt.Errorf("config file path is required. Use --config flag")
+		}
+
+		// Read configuration to get repository path
+		config, err := readConfig(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to read config: %w", err)
+		}
+		repoPath := config.RepoPath
+
+		// Validate repository path
+		if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+			return fmt.Errorf("repository path does not exist: %s", repoPath)
+		}
+
+		// Check if it's a git repository
+		gitDir := filepath.Join(repoPath, ".git")
+		if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+			return fmt.Errorf("not a git repository: %s", repoPath)
+		}
+
+		if checkConcurrency {
+			checkConcurrencyCompliance(repoPath, configPath)
+		} else if showTimeline {
+			showBranchTimelines(repoPath, configPath)
+		} else {
+			slog.Info("Diagnosing repository", "path", repoPath)
+			showBranchesWithTestResults(repoPath)
+			showHomeciState(repoPath)
+		}
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to the home-ci config file (required)")
+	rootCmd.Flags().BoolVar(&checkConcurrency, "check-concurrency", false, "Check that max_concurrent_runs was respected")
+	rootCmd.Flags().BoolVar(&showTimeline, "show-timeline", false, "Show timeline of commits and tests per branch")
+	rootCmd.Flags().IntVarP(&verbose, "verbose", "v", 0, "Verbose level (0=error, 1=warn, 2=info, 3=debug)")
+}
+
 func main() {
-	var (
-		configPathFlag      = flag.String("config", "", "Path to the home-ci config file (required)")
-		checkConcurrencyFlag = flag.Bool("check-concurrency", false, "Check that max_concurrent_runs was respected")
-		showTimelineFlag    = flag.Bool("show-timeline", false, "Show timeline of commits and tests per branch")
-		helpFlag            = flag.Bool("help", false, "Show help")
-	)
-	flag.Parse()
-
-	if *helpFlag {
-		fmt.Println("Home-CI Repository Diagnostic Tool")
-		fmt.Println("==================================")
-		fmt.Println("")
-		fmt.Println("Usage: home-ci-diag [options]")
-		fmt.Println("")
-		fmt.Println("Options:")
-		flag.PrintDefaults()
-		fmt.Println("")
-		fmt.Println("Examples:")
-		fmt.Println("  home-ci-diag -config=/path/to/config.yaml")
-		fmt.Println("  home-ci-diag -config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml -check-concurrency")
-		fmt.Println("  home-ci-diag -config=/path/to/config.yaml -show-timeline")
-		return
-	}
-
-	if *configPathFlag == "" {
-		log.Fatal("❌ Config file path is required. Use -config flag or -help for usage.")
-	}
-
-	// Read configuration to get repository path
-	config, err := readConfig(*configPathFlag)
-	if err != nil {
-		log.Fatalf("❌ Failed to read config: %v", err)
-	}
-	repoPath := config.RepoPath
-
-	// Validate repository path
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		log.Fatalf("❌ Repository path does not exist: %s", repoPath)
-	}
-
-	// Check if it's a git repository
-	gitDir := filepath.Join(repoPath, ".git")
-	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
-		log.Fatalf("❌ Not a git repository: %s", repoPath)
-	}
-
-	if *checkConcurrencyFlag {
-		checkConcurrencyCompliance(repoPath, *configPathFlag)
-	} else if *showTimelineFlag {
-		showBranchTimelines(repoPath, *configPathFlag)
-	} else {
-		log.Printf("🔍 Diagnosing repository: %s", repoPath)
-		showBranchesWithTestResults(repoPath)
-		showHomeciState(repoPath)
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }
 
@@ -301,7 +310,8 @@ func checkConcurrencyCompliance(repoPath, configPath string) {
 	// Read configuration
 	config, err := readConfig(configPath)
 	if err != nil {
-		log.Fatalf("❌ Failed to read config: %v", err)
+		slog.Error("Failed to read config", "error", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("📊 Configuration: max_concurrent_runs = %d\n", config.MaxConcurrentRuns)
@@ -309,7 +319,8 @@ func checkConcurrencyCompliance(repoPath, configPath string) {
 	// Read all test results
 	testResults, err := readTestResults(repoPath)
 	if err != nil {
-		log.Fatalf("❌ Failed to read test results: %v", err)
+		slog.Error("Failed to read test results", "error", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("📋 Found %d test results to analyze\n", len(testResults))

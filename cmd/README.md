@@ -8,7 +8,7 @@ This directory contains the main entry points for the different binaries in this
 cmd/
 ├── home-ci/        # Main home-ci application
 │   └── main.go
-└── e2e-home-ci/    # End-to-end test harness
+└── home-ci-e2e/    # End-to-end test harness
     └── main.go
 ```
 
@@ -24,12 +24,12 @@ go build -o home-ci ./cmd/home-ci
 make build
 ```
 
-### `e2e-home-ci`
+### `home-ci-e2e`
 The end-to-end test harness used to validate home-ci functionality by creating test repositories and simulating development activity.
 
 **Build:**
 ```bash
-go build -o e2e-home-ci ./cmd/e2e-home-ci
+go build -o home-ci-e2e ./cmd/home-ci-e2e
 # or
 make build-test
 ```

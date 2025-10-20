@@ -40,8 +40,8 @@ jobs:
       id: upload-e2e
       uses: actions/upload-artifact@v4
       with:
-        name: e2e-home-ci-binary
-        path: e2e-home-ci
+        name: home-ci-e2e-binary
+        path: home-ci-e2e
         retention-days: 1
 
     - name: Upload diagnostics tool
@@ -79,15 +79,15 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
 
     - name: Run success test
-      run: ./e2e-home-ci -type=success
+      run: ./home-ci-e2e -type=success
 
   test-fail:
     runs-on: ubuntu-latest
@@ -103,15 +103,15 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
 
     - name: Run fail test
-      run: ./e2e-home-ci -type=fail
+      run: ./home-ci-e2e -type=fail
 
   test-quick:
     runs-on: ubuntu-latest
@@ -127,15 +127,15 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
 
     - name: Run quick tests
-      run: ./e2e-home-ci -type=quick
+      run: ./home-ci-e2e -type=quick
 
   test-normal:
     runs-on: ubuntu-latest
@@ -151,15 +151,15 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
 
     - name: Run normal tests
-      run: ./e2e-home-ci -type=normal -duration=2m
+      run: ./home-ci-e2e -type=normal -duration=2m
 
   test-long:
     runs-on: ubuntu-latest
@@ -176,15 +176,15 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
 
     - name: Run long tests
-      run: ./e2e-home-ci -type=long -duration=5m
+      run: ./home-ci-e2e -type=long -duration=5m
 
   test-timeout:
     runs-on: ubuntu-latest
@@ -200,15 +200,15 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
 
     - name: Run timeout tests
-      run: ./e2e-home-ci -type=timeout
+      run: ./home-ci-e2e -type=timeout
 
   test-dispatch-one-success:
     runs-on: ubuntu-latest
@@ -224,12 +224,12 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
 
     - name: Create secret.yaml for dispatch
       run: |
@@ -237,7 +237,7 @@ jobs:
         echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-one-success/secret.yaml
 
     - name: Run dispatch-one-success tests
-      run: ./e2e-home-ci -type=dispatch-one-success
+      run: ./home-ci-e2e -type=dispatch-one-success
 
   test-dispatch-all:
     runs-on: ubuntu-latest
@@ -253,12 +253,12 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
 
     - name: Create secret.yaml for dispatch
       run: |
@@ -266,7 +266,7 @@ jobs:
         echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-all/secret.yaml
 
     - name: Run dispatch-all tests
-      run: ./e2e-home-ci -type=dispatch-all
+      run: ./home-ci-e2e -type=dispatch-all
 
   test-dispatch-no-token-file:
     runs-on: ubuntu-latest
@@ -282,15 +282,15 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
 
     - name: Run dispatch-no-token-file tests
-      run: ./e2e-home-ci -type=dispatch-no-token-file
+      run: ./home-ci-e2e -type=dispatch-no-token-file
 
   test-concurrent-limit:
     runs-on: ubuntu-latest
@@ -306,7 +306,7 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Download diagnostics tool
       uses: actions/download-artifact@v4
@@ -316,11 +316,11 @@ jobs:
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
         chmod +x home-ci-diag
 
     - name: Run concurrent-limit tests
-      run: ./e2e-home-ci -type=concurrent-limit
+      run: ./home-ci-e2e -type=concurrent-limit
 
     - name: Verify concurrency compliance
       run: ./home-ci-diag -config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml -check-concurrency
@@ -339,7 +339,7 @@ jobs:
     - name: Download e2e test harness
       uses: actions/download-artifact@v4
       with:
-        name: e2e-home-ci-binary
+        name: home-ci-e2e-binary
 
     - name: Download diagnostics tool
       uses: actions/download-artifact@v4
@@ -349,11 +349,11 @@ jobs:
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x e2e-home-ci
+        chmod +x home-ci-e2e
         chmod +x home-ci-diag
 
     - name: Run continuous-ci tests
-      run: ./e2e-home-ci -type=continuous-ci
+      run: ./home-ci-e2e -type=continuous-ci
 
     - name: Verify continuous integration compliance
       run: ./home-ci-diag -config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml -check-concurrency

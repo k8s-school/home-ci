@@ -23,7 +23,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "e2e-home-ci",
+	Use:   "home-ci-e2e",
 	Short: "Home-CI E2E Test Harness",
 	Long: `A testing tool for the Home-CI system that simulates various development scenarios
 and verifies the CI system's behavior under different conditions.`,

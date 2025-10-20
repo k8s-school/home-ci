@@ -15,13 +15,13 @@
   # Fichiers modifiés  
   /internal/config/config.go                # Ajout champs dispatch
   /resources/constants.go                   # Ajout ConfigDispatch
-  /cmd/e2e-home-ci/main.go                 # Support type dispatch
+  /cmd/home-ci-e2e/main.go                 # Support type dispatch
   /.gitignore                               # Ignore secret.yaml
 
   Commandes de test :
 
   # Test complet dispatch
-  ./e2e-home-ci -type=dispatch -duration=2m
+  ./home-ci-e2e -type=dispatch -duration=2m
 
   # Test avec logs
   ./home-ci -c resources/e2e/configs/config-dispatch.yaml -v
