@@ -2,13 +2,8 @@
 set -e
 
 # Parse command line arguments
-TIMEOUT_TEST_MODE=false
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --timeout-test)
-            TIMEOUT_TEST_MODE=true
-            shift
-            ;;
         *)
             # Unknown option, ignore for now
             shift
@@ -37,25 +32,9 @@ mkdir -p "$(dirname "$RESULT_FILE")"
 echo "=== E2E Test Suite ==="
 echo "Branch: $BRANCH_NAME | Commit: $COMMIT_HASH"
 echo "Message: $COMMIT_MESSAGE"
-if [ "$TIMEOUT_TEST_MODE" = true ]; then
-    echo "Mode: Timeout Test"
-fi
 
 # Determine expected behavior based on commit message and branch
 determine_test_behavior() {
-    # Special handling for timeout tests: check if --timeout-test flag was passed
-    if [ "$TIMEOUT_TEST_MODE" = true ]; then
-        # For timeout tests, force timeout behavior unless commit message overrides
-        if [[ "$COMMIT_MESSAGE" =~ .*SUCCESS.* ]]; then
-            echo "success"
-        elif [[ "$COMMIT_MESSAGE" =~ .*FAIL.* ]]; then
-            echo "failure"
-        else
-            echo "timeout"  # Default for timeout tests
-        fi
-        return
-    fi
-
     # Check commit message patterns first (highest priority)
     if [[ "$COMMIT_MESSAGE" =~ .*FAIL.* ]]; then
         echo "failure"
