@@ -35,7 +35,12 @@ and verifies the CI system's behavior under different conditions.`,
 			return runInitialization()
 		}
 
-		return runE2ETests()
+		err := runE2ETests()
+		// Suppress usage for test execution errors (not configuration errors)
+		if _, isTestExecutionError := err.(*TestExecutionError); isTestExecutionError {
+			cmd.SilenceUsage = true
+		}
+		return err
 	},
 }
 
@@ -195,7 +200,7 @@ func runE2ETests() error {
 		slog.Info("Test harness completed successfully!")
 		return nil
 	} else {
-		return fmt.Errorf("test harness failed")
+		return NewTestExecutionError("test harness failed")
 	}
 }
 

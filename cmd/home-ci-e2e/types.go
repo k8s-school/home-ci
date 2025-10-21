@@ -121,6 +121,21 @@ type ValidationResult struct {
 	ValidationScore    float64 `json:"validation_score"`
 }
 
+// TestExecutionError represents an error during test execution (not configuration)
+// This type of error should not display usage information
+type TestExecutionError struct {
+	message string
+}
+
+func (e *TestExecutionError) Error() string {
+	return e.message
+}
+
+// NewTestExecutionError creates a new test execution error
+func NewTestExecutionError(message string) *TestExecutionError {
+	return &TestExecutionError{message: message}
+}
+
 // parseTestType parses test type from string
 func parseTestType(s string) (TestType, error) {
 	switch s {
