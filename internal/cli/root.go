@@ -30,9 +30,11 @@ and automatically runs tests when changes are detected.`,
 		// Initialize logging
 		logging.InitLogging(verbose)
 
+		slog.Debug("Using configuration file", "config_path", configPath)
+
 		cfg, err := config.Load(configPath)
 		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
+			return fmt.Errorf("failed to load config from '%s': %w", configPath, err)
 		}
 
 		// Parse and set the KeepTime from command line
@@ -64,7 +66,7 @@ and automatically runs tests when changes are detected.`,
 }
 
 func init() {
-	RootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to configuration file")
+	RootCmd.Flags().StringVarP(&configPath, "config", "c", "/etc/home-ci/config.yaml", "Path to configuration file")
 	RootCmd.Flags().IntVarP(&verbose, "verbose", "v", 0, "Verbose level (0=error, 1=warn, 2=info, 3=debug)")
 	RootCmd.Flags().StringVar(&keepTime, "keep-time", "", "Keep cloned repositories for specified duration (e.g., '2h', '30m', '1h30m') before cleaning up")
 }

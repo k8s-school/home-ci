@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -65,11 +66,11 @@ func Load(path string) (Config, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return config, err // Fail if file cannot be read (including if it doesn't exist)
+		return config, fmt.Errorf("cannot read configuration file '%s': %w", path, err)
 	}
 
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return config, err
+		return config, fmt.Errorf("cannot parse configuration file '%s': %w", path, err)
 	}
 
 	return config, nil
