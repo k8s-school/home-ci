@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/k8s-school/home-ci/resources"
 )
 
@@ -477,7 +479,8 @@ func (th *E2ETestHarness) cleanupE2EResources() {
 }
 
 // analyzeTestResults compares actual test results against expected outcomes
-func (th *E2ETestHarness) analyzeTestResults() {
+// Returns true if all tests passed (including GitHub Actions dispatch), false otherwise
+func (th *E2ETestHarness) analyzeTestResults() bool {
 	log.Println("")
 	log.Println("=== Test Results Analysis ===")
 
@@ -486,13 +489,14 @@ func (th *E2ETestHarness) analyzeTestResults() {
 	files, err := os.ReadDir(homeCIDir)
 	if err != nil {
 		log.Printf("⚠️ Could not read test results directory: %v", err)
-		return
+		return false
 	}
 
 	totalTests := 0
 	successfulTests := 0
 	failedTests := 0
 	timedOutTests := 0
+	hasErrors := false
 
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
@@ -529,10 +533,23 @@ func (th *E2ETestHarness) analyzeTestResults() {
 			status := "SUCCESS"
 			if expectedBehavior != actualBehavior {
 				status = "ERROR"
+				hasErrors = true
+			}
+
+			// Check GitHub Actions dispatch status for dispatch tests
+			githubStatus := ""
+			if th.testType.isDispatchTest() && result.GitHubActionsNotified {
+				if !result.GitHubActionsSuccess {
+					status = "ERROR"
+					hasErrors = true
+					githubStatus = fmt.Sprintf(" | GitHub Dispatch: FAILED (%s)", result.GitHubActionsErrorMessage)
+				} else {
+					githubStatus = " | GitHub Dispatch: SUCCESS"
+				}
 			}
 
 			log.Printf("Branch: %s | Commit: %.8s", result.Branch, result.Commit)
-			log.Printf("  Expected: %s | Actual: %s | Status: %s", expectedBehavior, actualBehavior, status)
+			log.Printf("  Expected: %s | Actual: %s | Status: %s%s", expectedBehavior, actualBehavior, status, githubStatus)
 		}
 	}
 
@@ -540,6 +557,7 @@ func (th *E2ETestHarness) analyzeTestResults() {
 	log.Printf("Summary: %d total tests (%d success, %d failed, %d timeout)",
 		totalTests, successfulTests, failedTests, timedOutTests)
 	log.Println("===============================")
+	return !hasErrors
 }
 
 // determineExpectedBehavior determines what the expected test outcome should be for a given branch/commit
@@ -550,7 +568,21 @@ func (th *E2ETestHarness) determineExpectedBehavior(branch, commit string) strin
 		return "timeout"
 	}
 
-	// Check branch patterns (simplified version of run-e2e.sh logic)
+	// First check commit message patterns (matching run-e2e.sh logic)
+	// We need to get the commit message for this commit
+	commitMessage := th.getCommitMessage(commit)
+
+	if strings.Contains(commitMessage, "FAIL") {
+		return "failure"
+	} else if strings.Contains(commitMessage, "TIMEOUT") {
+		return "timeout"
+	} else if strings.Contains(commitMessage, "SUCCESS") {
+		return "success"
+	} else if strings.Contains(commitMessage, "CONCURRENT_TEST") {
+		return "concurrent_test"
+	}
+
+	// Fallback to branch patterns (matching run-e2e.sh fallback logic)
 	switch branch {
 	case "main":
 		return "success"
@@ -568,6 +600,31 @@ func (th *E2ETestHarness) determineExpectedBehavior(branch, commit string) strin
 		}
 		return "success" // Default
 	}
+}
+
+// getCommitMessage retrieves the commit message for a given commit hash using go-git API
+func (th *E2ETestHarness) getCommitMessage(commit string) string {
+	// Open the git repository
+	repo, err := git.PlainOpen(th.testRepoPath)
+	if err != nil {
+		return ""
+	}
+
+	// Parse the commit hash
+	hash := plumbing.NewHash(commit)
+
+	// Get the commit object
+	commitObj, err := repo.CommitObject(hash)
+	if err != nil {
+		return ""
+	}
+
+	// Return the commit message (first line only)
+	lines := strings.Split(strings.TrimSpace(commitObj.Message), "\n")
+	if len(lines) > 0 {
+		return lines[0]
+	}
+	return ""
 }
 
 // cleanupReposDirectory removes all directories from /tmp/home-ci/repos

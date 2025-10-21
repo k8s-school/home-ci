@@ -176,6 +176,11 @@ func (tt TestType) getDataPath() string {
 	return filepath.Join(tt.getTestDirectory(), "data")
 }
 
+// isDispatchTest returns true for tests that use GitHub Actions dispatch
+func (tt TestType) isDispatchTest() bool {
+	return tt == TestDispatchOneSuccess || tt == TestDispatchAll || tt == TestDispatchNoTokenFile
+}
+
 // helper function for min
 func min(a, b int) int {
 	if a < b {

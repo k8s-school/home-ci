@@ -173,7 +173,7 @@ func runE2ETests() error {
 	th.printStatistics()
 
 	// Analyze test results against expectations
-	th.analyzeTestResults()
+	resultsValid := th.analyzeTestResults()
 
 	// Clean up e2e test harness resources
 	th.cleanupE2EResources()
@@ -182,13 +182,13 @@ func runE2ETests() error {
 	success := true
 	switch testTypeVal {
 	case TestTimeout:
-		success = th.timeoutDetected && th.verifyCleanupExecuted()
+		success = th.timeoutDetected && th.verifyCleanupExecuted() && resultsValid
 	case TestSuccess, TestFail, TestDispatchOneSuccess:
-		// For single commit tests, success means at least one test was detected
-		success = th.totalTestsDetected > 0
+		// For single commit tests, success means at least one test was detected and all results valid
+		success = th.totalTestsDetected > 0 && resultsValid
 	default:
-		// For multi-commit tests, success means tests were detected
-		success = th.totalTestsDetected > 0
+		// For multi-commit tests, success means tests were detected and all results valid
+		success = th.totalTestsDetected > 0 && resultsValid
 	}
 
 	if success {

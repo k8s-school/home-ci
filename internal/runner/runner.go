@@ -481,7 +481,7 @@ func (te *TestExecution) sendGitHubNotificationIfNeeded() {
 	if err := te.runner.notifyGitHubActions(te.branch, te.commit, te.testResult.Success, te.logFilePath, te.resultFilePath); err != nil {
 		te.testResult.GitHubActionsSuccess = false
 		te.testResult.GitHubActionsErrorMessage = err.Error()
-		slog.Debug("GitHub Actions notification failed",
+		slog.Error("GitHub Actions notification failed",
 			"branch", te.branch,
 			"commit", te.commit[:8],
 			"error", err)
