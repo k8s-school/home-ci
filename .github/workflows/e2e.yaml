@@ -98,7 +98,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run success test
-      run: ./home-ci-e2e --type=success
+      run: ./home-ci-e2e -v3 --type=success
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/success/config-success.yaml --check-timeline
@@ -131,7 +131,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run fail test
-      run: ./home-ci-e2e --type=fail
+      run: ./home-ci-e2e -v3 --type=fail
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/fail/config-fail.yaml --check-timeline
@@ -164,7 +164,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run quick tests
-      run: ./home-ci-e2e --type=quick
+      run: ./home-ci-e2e -v3 --type=quick
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/quick/config-quick.yaml --check-timeline
@@ -200,7 +200,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run normal tests
-      run: ./home-ci-e2e --type=normal --duration=2m
+      run: ./home-ci-e2e -v3 --type=normal --duration=2m
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-timeline
@@ -237,7 +237,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run long tests
-      run: ./home-ci-e2e --type=long --duration=5m
+      run: ./home-ci-e2e -v3 --type=long --duration=5m
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/long/config-long.yaml --check-timeline
@@ -273,7 +273,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run timeout tests
-      run: ./home-ci-e2e --type=timeout
+      run: ./home-ci-e2e -v3 --type=timeout
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/timeout/config-timeout.yaml --check-timeline
@@ -311,7 +311,7 @@ jobs:
         echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-one-success/secret.yaml
 
     - name: Run dispatch-one-success tests
-      run: ./home-ci-e2e --type=dispatch-one-success
+      run: ./home-ci-e2e -v3 --type=dispatch-one-success
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-one-success/config-dispatch-one-success.yaml --check-timeline
@@ -349,7 +349,7 @@ jobs:
         echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-all/secret.yaml
 
     - name: Run dispatch-all tests
-      run: ./home-ci-e2e --type=dispatch-all
+      run: ./home-ci-e2e -v3 --type=dispatch-all
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-all/config-dispatch-all.yaml --check-timeline
@@ -385,7 +385,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run dispatch-no-token-file tests
-      run: ./home-ci-e2e --type=dispatch-no-token-file
+      run: ./home-ci-e2e -v3 --type=dispatch-no-token-file
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-no-token-file/config-dispatch-no-token-file.yaml --check-timeline
@@ -423,7 +423,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run concurrent-limit tests
-      run: ./home-ci-e2e --type=concurrent-limit
+      run: ./home-ci-e2e -v3 --type=concurrent-limit
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml --check-timeline
@@ -464,7 +464,7 @@ jobs:
         chmod +x home-ci-diag
 
     - name: Run continuous-ci tests
-      run: ./home-ci-e2e --type=continuous-ci
+      run: ./home-ci-e2e -v3 --type=continuous-ci
 
     - name: Verify workflow consistency
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-timeline
