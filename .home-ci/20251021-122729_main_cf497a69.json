@@ -1,0 +1,15 @@
+{
+  "branch": "main",
+  "commit": "cf497a6931a3ed0af025670ff9c6c89428e9150d",
+  "log_file": "20251021-122729_main_cf497a69.log",
+  "start_time": "2025-10-21T12:27:29.697325916+02:00",
+  "end_time": "2025-10-21T12:27:30.392765963+02:00",
+  "duration": 695440029,
+  "success": false,
+  "timed_out": false,
+  "cleanup_executed": false,
+  "cleanup_success": false,
+  "github_actions_notified": false,
+  "github_actions_success": false,
+  "error_message": "fork/exec /tmp/home-ci/repos/main-cf497a69-20251021-122729/e2e/fink-ci.sh: no such file or directory"
+}

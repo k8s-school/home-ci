@@ -1,4 +1,4 @@
-.PHONY: build build-e2e build-diag test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-no-token-file test-dispatch-all test-quick test-normal test-long test-concurrent-limit test-continuous-ci clean clean-all help
+.PHONY: build build-e2e build-diag install test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-no-token-file test-dispatch-all test-quick test-normal test-long test-concurrent-limit test-continuous-ci copy-secret-if-exists clean clean-all help
 
 # Default target
 help:
@@ -10,6 +10,7 @@ help:
 	@echo "  build-home-ci       Build the home-ci binary"
 	@echo "  build-e2e           Build the e2e test harness"
 	@echo "  build-diag          Build the diagnostics tool"
+	@echo "  install             Install home-ci and home-ci-diag binaries to /usr/local/bin"
 	@echo "  clean               Clean build artifacts"
 	@echo ""
 	@echo "Test targets:"
@@ -45,7 +46,7 @@ build-home-ci:
 build-e2e:
 	@echo "🏗️  Building e2e test harness..."
 	go build -o home-ci-e2e ./cmd/home-ci-e2e
-	@echo "✅ Build complete: ./home-ci-e2e"
+	@echo "✅ Build complete: ./home-ci-e2e -v3"
 
 # Build the diagnostics tool
 build-diag:
@@ -53,10 +54,21 @@ build-diag:
 	go build -o home-ci-diag ./cmd/home-ci-diag
 	@echo "✅ Build complete: ./home-ci-diag"
 
+# Install binaries to system
+install: build-home-ci build-diag
+	@echo "📦 Installing home-ci and home-ci-diag to /usr/local/bin..."
+	@if [ ! -f "./home-ci" ]; then echo "❌ home-ci binary not found"; exit 1; fi
+	@if [ ! -f "./home-ci-diag" ]; then echo "❌ home-ci-diag binary not found"; exit 1; fi
+	sudo cp ./home-ci /usr/local/bin/
+	sudo cp ./home-ci-diag /usr/local/bin/
+	sudo chmod +x /usr/local/bin/home-ci
+	sudo chmod +x /usr/local/bin/home-ci-diag
+	@echo "✅ Binaries installed successfully"
+
 # Run integration tests (default duration)
 test: build
 	@echo "🧪 Running integration tests..."
-	./home-ci-e2e --type=normal -duration=3m
+	./home-ci-e2e -v3 --type=normal -duration=3m
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-timeline
@@ -67,7 +79,7 @@ test: build
 # Run single commit success test
 test-success: build
 	@echo "✅ Running success test..."
-	./home-ci-e2e --type=success
+	./home-ci-e2e -v3 --type=success
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/success/config-success.yaml --check-timeline
@@ -75,7 +87,7 @@ test-success: build
 # Run single commit failure test
 test-fail: build
 	@echo "❌ Running failure test..."
-	./home-ci-e2e --type=fail
+	./home-ci-e2e -v3 --type=fail
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/fail/config-fail.yaml --check-timeline
@@ -83,15 +95,28 @@ test-fail: build
 # Run timeout validation test
 test-timeout: build
 	@echo "🕐 Running timeout validation test..."
-	./home-ci-e2e --type=timeout
+	./home-ci-e2e -v3 --type=timeout
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/timeout/config-timeout.yaml --check-timeline
 
+# Helper function to copy secret.yaml for dispatch tests
+copy-secret-if-exists:
+	@if [ -f secret.yaml ]; then \
+		echo "📄 Copying secret.yaml to dispatch test directories..."; \
+		mkdir -p /tmp/home-ci/e2e/dispatch-one-success; \
+		mkdir -p /tmp/home-ci/e2e/dispatch-all; \
+		cp secret.yaml /tmp/home-ci/e2e/dispatch-one-success/secret.yaml; \
+		cp secret.yaml /tmp/home-ci/e2e/dispatch-all/secret.yaml; \
+		echo "✅ secret.yaml copied to dispatch test directories"; \
+	else \
+		echo "⚠️  No secret.yaml found in project root - dispatch tests may fail"; \
+	fi
+
 # Run single commit dispatch test
-test-dispatch-one-success: build
+test-dispatch-one-success: build copy-secret-if-exists
 	@echo "🚀 Running single commit dispatch test..."
-	./home-ci-e2e --type=dispatch-one-success
+	./home-ci-e2e -v3 --type=dispatch-one-success
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-one-success/config-dispatch-one-success.yaml --check-timeline
@@ -99,15 +124,15 @@ test-dispatch-one-success: build
 # Run single commit dispatch test with no token file
 test-dispatch-no-token-file: build
 	@echo "🚀 Running single commit dispatch test (no token file)..."
-	./home-ci-e2e --type=dispatch-no-token-file
+	./home-ci-e2e -v3 --type=dispatch-no-token-file
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-no-token-file/config-dispatch-no-token-file.yaml --check-timeline
 
 # Run multi commit dispatch test
-test-dispatch-all: build
+test-dispatch-all: build copy-secret-if-exists
 	@echo "🚀 Running multi commit dispatch test..."
-	./home-ci-e2e --type=dispatch-all
+	./home-ci-e2e -v3 --type=dispatch-all
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/dispatch-all/config-dispatch-all.yaml --check-timeline
@@ -118,7 +143,7 @@ test-dispatch-all: build
 # Run quick tests (4 commits)
 test-quick: build
 	@echo "⚡ Running quick integration tests..."
-	./home-ci-e2e --type=quick
+	./home-ci-e2e -v3 --type=quick
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/quick/config-quick.yaml --check-timeline
@@ -129,7 +154,7 @@ test-quick: build
 # Run normal integration tests
 test-normal: build
 	@echo "🧪 Running normal integration tests..."
-	./home-ci-e2e --type=normal -duration=3m
+	./home-ci-e2e -v3 --type=normal --duration=3m
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-timeline
@@ -140,7 +165,7 @@ test-normal: build
 # Run extended tests
 test-long: build
 	@echo "🐌 Running extended integration tests..."
-	./home-ci-e2e --type=long -duration=10m
+	./home-ci-e2e -v3 --type=long -duration=10m
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/long/config-long.yaml --check-timeline
@@ -151,7 +176,7 @@ test-long: build
 # Run concurrent limit test
 test-concurrent-limit: build
 	@echo "⚡ Running concurrent limit test (max_concurrent_runs=2)..."
-	./home-ci-e2e --type=concurrent-limit
+	./home-ci-e2e -v3 --type=concurrent-limit
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/concurrent-limit/config-concurrent-limit.yaml --check-timeline
@@ -162,7 +187,7 @@ test-concurrent-limit: build
 # Run continuous integration test
 test-continuous-ci: build
 	@echo "🔄 Running continuous integration test (max_concurrent_runs=3)..."
-	./home-ci-e2e --type=continuous-ci
+	./home-ci-e2e -v3 --type=continuous-ci
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-timeline

@@ -55,7 +55,7 @@ func NewCleanupManager(keepTime time.Duration, ctx context.Context) *CleanupMana
 func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 	gitRepo, err := NewGitRepository(cfg.RepoPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open git repository at '%s': %w\n\nPlease check your configuration:\n1. Ensure repo_path in %s points to a valid git repository\n2. If using a placeholder configuration, update repo_path to point to an actual repository\n3. Example: repo_path: \"/path/to/your/repo\" or repo_path: \".\" for current directory", cfg.RepoPath, err, configPath)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

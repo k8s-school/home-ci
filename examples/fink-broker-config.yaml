@@ -1,0 +1,19 @@
+repo_path: "/home/fjammes/src/astrolabsoftware/fink-broker/"
+check_interval: 30s
+test_script: "e2e/run.sh"
+options: "-c -s"
+max_commit_age: 240h
+test_timeout: 30m
+fetch_remote: true
+max_concurrent_runs: 1
+
+# TODO
+cleanup:
+  after_e2e: false 
+  script: "e2e/clean.sh"
+
+github_actions_dispatch:
+  enabled: true
+  github_repo: "astrolabsoftware/fink-broker"
+  github_token_file: "/home/fjammes/secret.yaml"
+  dispatch_type: "test-home-ci-no-token"

@@ -18,7 +18,7 @@ type GitRepository struct {
 func NewGitRepository(repoPath string) (*GitRepository, error) {
 	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open repository: %w", err)
+		return nil, fmt.Errorf("repository does not exist or is not a valid git repository at path '%s': %w", repoPath, err)
 	}
 
 	return &GitRepository{

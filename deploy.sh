@@ -20,12 +20,17 @@ if ! command -v sudo &> /dev/null; then
     exit 1
 fi
 
-# Build the application
-echo "🏗️  Building home-ci..."
-make build-home-ci
+# Build the applications
+echo "🏗️  Building home-ci and home-ci-diag..."
+make build-home-ci build-diag
 
 if [[ ! -f "./home-ci" ]]; then
     echo "❌ Build failed - home-ci binary not found"
+    exit 1
+fi
+
+if [[ ! -f "./home-ci-diag" ]]; then
+    echo "❌ Build failed - home-ci-diag binary not found"
     exit 1
 fi
 
@@ -49,12 +54,11 @@ sudo mkdir -p "$DATA_DIR"
 sudo chown "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"
 sudo chown "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR"
 
-# Install the binary
-echo "📦 Installing home-ci to $INSTALL_DIR..."
-sudo cp ./home-ci "$INSTALL_DIR/"
-sudo chmod +x "$INSTALL_DIR/home-ci"
+# Install the binaries using make install
+echo "📦 Installing binaries using make install..."
+make install
 
-echo "✅ Binary installed successfully"
+echo "✅ Binaries installed successfully"
 
 # Create systemd service file
 echo "⚙️  Creating systemd service file..."
@@ -184,6 +188,7 @@ echo "  • View logs:          sudo journalctl -u home-ci.service -f"
 echo "  • Restart service:    sudo systemctl restart home-ci.service"
 echo "  • Stop service:       sudo systemctl stop home-ci.service"
 echo "  • Edit config:        sudo nano $CONFIG_DIR/config.yaml"
+echo "  • Run diagnostics:    home-ci-diag --config=$CONFIG_DIR/config.yaml --check-timeline"
 echo ""
 echo "⚠️  Don't forget to:"
 echo "  1. Edit $CONFIG_DIR/config.yaml with your repository settings"

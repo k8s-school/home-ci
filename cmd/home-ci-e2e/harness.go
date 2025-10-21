@@ -120,6 +120,13 @@ func (th *E2ETestHarness) setupTestRepo() error {
 		return fmt.Errorf("failed to create repo directory: %w", err)
 	}
 
+	// Copy secret.yaml for dispatch tests if it exists in project root
+	if th.testType.isDispatchTest() {
+		if err := th.copySecretIfExists(); err != nil {
+			return fmt.Errorf("failed to copy secret.yaml: %w", err)
+		}
+	}
+
 	// Create the e2e directory
 	e2eDir := filepath.Join(th.testRepoPath, "e2e")
 	if err := os.MkdirAll(e2eDir, 0755); err != nil {
@@ -646,6 +653,35 @@ func (th *E2ETestHarness) cleanupReposDirectory() error {
 		return fmt.Errorf("failed to recreate repos directory: %w", err)
 	}
 
+	return nil
+}
+
+// copySecretIfExists copies secret.yaml from project root to test directory for dispatch tests
+func (th *E2ETestHarness) copySecretIfExists() error {
+	// Look for secret.yaml in the current working directory (project root)
+	sourceSecret := "secret.yaml"
+	if _, err := os.Stat(sourceSecret); os.IsNotExist(err) {
+		if th.testType != TestTimeout {
+			slog.Debug("No secret.yaml found in project root - dispatch may fail if not provided by CI")
+		}
+		return nil // Not an error - CI will provide the secret
+	}
+
+	// Read the secret file
+	content, err := os.ReadFile(sourceSecret)
+	if err != nil {
+		return fmt.Errorf("failed to read secret.yaml: %w", err)
+	}
+
+	// Write to test directory
+	destSecret := filepath.Join(th.tempRunDir, "secret.yaml")
+	if err := os.WriteFile(destSecret, content, 0600); err != nil {
+		return fmt.Errorf("failed to write secret.yaml to test directory: %w", err)
+	}
+
+	if th.testType != TestTimeout {
+		slog.Debug("Copied secret.yaml to test directory for dispatch test")
+	}
 	return nil
 }
 

@@ -6,6 +6,7 @@ max_commit_age: 240h
 test_timeout: 2m  # Allow enough time for 4 test cases
 fetch_remote: false
 max_concurrent_runs: 1
+keep_time: 24h  # Preserve test data for debugging
 
 cleanup:
   after_e2e: false

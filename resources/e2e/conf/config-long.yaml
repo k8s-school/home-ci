@@ -6,6 +6,7 @@ max_commit_age: 240h
 test_timeout: 10m
 fetch_remote: false
 max_concurrent_runs: 1
+keep_time: 24h  # Preserve test data for debugging
 
 cleanup:
   after_e2e: false

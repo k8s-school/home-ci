@@ -1,0 +1,20 @@
+=== Cloning Repository ===
+Source: .
+Destination: /tmp/ci-test-main-cf497a69-715978589
+Branch: main
+Commit: cf497a6931a3ed0af025670ff9c6c89428e9150d
+========================
+
+Repository cloned successfully (single branch: main)
+Checked out branch main successfully
+Reset to commit cf497a6931a3ed0af025670ff9c6c89428e9150d successfully
+========================
+
+=== CI Test Run ===
+Branch: main
+Commit: cf497a6931a3ed0af025670ff9c6c89428e9150d
+Timestamp: 2025-10-21T12:10:26+02:00
+Command: /tmp/ci-test-main-cf497a69-715978589/e2e/fink-ci.sh -c -i ztf
+Working Directory: /tmp/ci-test-main-cf497a69-715978589
+==================
+

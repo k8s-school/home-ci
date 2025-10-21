@@ -33,7 +33,7 @@ go.work.sum
 .env
 
 # Secret files
-secret.yaml
+secret.yaml*
 
 # Editor/IDE
 # .idea/

@@ -14,5 +14,5 @@ cleanup:
 github_actions_dispatch:
   enabled: true
   github_repo: "k8s-school/home-ci"
-  github_token_file: "/home/fjammes/src/github.com/k8s-school/home-ci/secret.yaml"
+  github_token_file: "secret.yaml"  # Relative path - will use config directory
   dispatch_type: "test-home-ci"
