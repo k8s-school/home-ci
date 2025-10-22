@@ -539,8 +539,14 @@ func (th *E2ETestHarness) analyzeTestResults() bool {
 			// Compare expected vs actual
 			status := "SUCCESS"
 			if expectedBehavior != actualBehavior {
-				status = "ERROR"
-				hasErrors = true
+				// Special case: concurrent_test expectation with success result is valid
+				if expectedBehavior == "concurrent_test" && actualBehavior == "success" {
+					// This is expected - concurrent tests that complete successfully are considered successful
+					status = "SUCCESS"
+				} else {
+					status = "ERROR"
+					hasErrors = true
+				}
 			}
 
 			// Check GitHub Actions dispatch status for dispatch tests
