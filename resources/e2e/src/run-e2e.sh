@@ -40,10 +40,10 @@ determine_test_behavior() {
         echo "failure"
     elif [[ "$COMMIT_MESSAGE" =~ .*TIMEOUT.* ]]; then
         echo "timeout"
+    elif [[ "$COMMIT_MESSAGE" =~ .*SUCCESS_CONCURRENT_TEST.* ]]; then
+        echo "concurrent_success"
     elif [[ "$COMMIT_MESSAGE" =~ .*SUCCESS.* ]]; then
         echo "success"
-    elif [[ "$COMMIT_MESSAGE" =~ .*CONCURRENT_TEST.* ]]; then
-        echo "concurrent_success"
     else
         # Branch-based behavior (fallback)
         case "$BRANCH_NAME" in

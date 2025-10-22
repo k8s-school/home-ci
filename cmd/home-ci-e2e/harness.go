@@ -252,10 +252,10 @@ func (th *E2ETestHarness) simulateConcurrentActivity() {
 	}
 
 	commitMessages := []string{
-		"CONCURRENT_TEST: Test 1 - Should run in first batch",
-		"CONCURRENT_TEST: Test 2 - Should run in first batch",
-		"CONCURRENT_TEST: Test 3 - Should run in second batch",
-		"CONCURRENT_TEST: Test 4 - Should run in second batch",
+		"SUCCESS_CONCURRENT_TEST: Test 1 - Should run in first batch",
+		"SUCCESS_CONCURRENT_TEST: Test 2 - Should run in first batch",
+		"SUCCESS_CONCURRENT_TEST: Test 3 - Should run in second batch",
+		"SUCCESS_CONCURRENT_TEST: Test 4 - Should run in second batch",
 	}
 
 	// Create all commits quickly to trigger concurrent execution
@@ -586,10 +586,10 @@ func (th *E2ETestHarness) determineExpectedBehavior(branch, commit string) strin
 		return "failure"
 	} else if strings.Contains(commitMessage, "TIMEOUT") {
 		return "timeout"
+	} else if strings.Contains(commitMessage, "SUCCESS_CONCURRENT_TEST") {
+		return "success"  // Concurrent tests should succeed, concurrency is checked by home-ci-diag
 	} else if strings.Contains(commitMessage, "SUCCESS") {
 		return "success"
-	} else if strings.Contains(commitMessage, "CONCURRENT_TEST") {
-		return "success"  // Concurrent tests should succeed, concurrency is checked by home-ci-diag
 	}
 
 	// Fallback to branch patterns (matching run-e2e.sh fallback logic)
