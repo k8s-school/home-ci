@@ -43,7 +43,7 @@ determine_test_behavior() {
     elif [[ "$COMMIT_MESSAGE" =~ .*SUCCESS.* ]]; then
         echo "success"
     elif [[ "$COMMIT_MESSAGE" =~ .*CONCURRENT_TEST.* ]]; then
-        echo "concurrent_test"
+        echo "concurrent_success"
     else
         # Branch-based behavior (fallback)
         case "$BRANCH_NAME" in
@@ -148,7 +148,7 @@ case "$EXPECTED_BEHAVIOR" in
         exit 0
         ;;
 
-    "concurrent_test")
+    "concurrent_success")
         echo "🔄 Starting concurrent test..."
         echo "⏳ Running 15-second test to observe concurrency..."
 
@@ -164,4 +164,5 @@ case "$EXPECTED_BEHAVIOR" in
         echo "Concurrent test completed successfully" > "$DATA_DIR/${BRANCH_SAFE}-${COMMIT_HASH}_CONCURRENT_SUCCESS.txt"
         exit 0
         ;;
+
 esac

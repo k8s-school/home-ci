@@ -539,14 +539,8 @@ func (th *E2ETestHarness) analyzeTestResults() bool {
 			// Compare expected vs actual
 			status := "SUCCESS"
 			if expectedBehavior != actualBehavior {
-				// Special case: concurrent_test expectation with success result is valid
-				if expectedBehavior == "concurrent_test" && actualBehavior == "success" {
-					// This is expected - concurrent tests that complete successfully are considered successful
-					status = "SUCCESS"
-				} else {
-					status = "ERROR"
-					hasErrors = true
-				}
+				status = "ERROR"
+				hasErrors = true
 			}
 
 			// Check GitHub Actions dispatch status for dispatch tests
@@ -595,7 +589,7 @@ func (th *E2ETestHarness) determineExpectedBehavior(branch, commit string) strin
 	} else if strings.Contains(commitMessage, "SUCCESS") {
 		return "success"
 	} else if strings.Contains(commitMessage, "CONCURRENT_TEST") {
-		return "concurrent_test"
+		return "success"  // Concurrent tests should succeed, concurrency is checked by home-ci-diag
 	}
 
 	// Fallback to branch patterns (matching run-e2e.sh fallback logic)
