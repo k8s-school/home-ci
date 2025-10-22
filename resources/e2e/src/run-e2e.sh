@@ -95,11 +95,11 @@ echo "📁 Test result: $RESULT_FILE"
 case "$EXPECTED_BEHAVIOR" in
     "success")
         echo "▶️ Environment setup..."
-        sleep 1
+        sleep 0.1
         echo "▶️ Running tests..."
-        sleep 2
+        sleep 0.2
         echo "▶️ Performance validation..."
-        sleep 1
+        sleep 0.1
         echo "✅ All tests passed"
 
         # Create success marker file
@@ -109,9 +109,9 @@ case "$EXPECTED_BEHAVIOR" in
 
     "failure")
         echo "▶️ Environment setup..."
-        sleep 1
+        sleep 0.1
         echo "▶️ Running tests..."
-        sleep 2
+        sleep 0.2
         echo "❌ Test suite failed: Mock error for testing"
         echo "❌ Error details: Simulated failure based on branch/commit pattern"
 
@@ -122,7 +122,7 @@ case "$EXPECTED_BEHAVIOR" in
 
     "timeout")
         echo "▶️ Environment setup..."
-        sleep 1
+        sleep 0.1
         echo "▶️ Running tests..."
         echo "⏳ Long-running operation starting..."
 
