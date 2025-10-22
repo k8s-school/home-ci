@@ -143,7 +143,7 @@ test-dispatch-all: build copy-secret-if-exists
 # Run quick tests (4 commits)
 test-quick: build
 	@echo "⚡ Running quick integration tests..."
-	./home-ci-e2e -v3 --type=quick
+	./home-ci-e2e -v3 --type=quick --duration=10s
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/quick/config-quick.yaml --check-timeline
