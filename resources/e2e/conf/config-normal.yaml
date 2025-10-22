@@ -3,7 +3,7 @@ check_interval: 30s
 test_script: "e2e/run-e2e.sh"
 options: "-c -i ztf"
 max_commit_age: 240h
-test_timeout: 10m
+test_timeout: 10s
 fetch_remote: false
 max_concurrent_runs: 1
 keep_time: 24h  # Preserve test data for debugging

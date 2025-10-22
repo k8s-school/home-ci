@@ -46,7 +46,7 @@ and verifies the CI system's behavior under different conditions.`,
 
 func init() {
 	rootCmd.Flags().StringVarP(&testType, "type", "t", "normal", "Test type: success, fail, timeout, dispatch-one-success, dispatch-no-token-file, quick, dispatch-all, normal, long, concurrent-limit, continuous-ci")
-	rootCmd.Flags().StringVarP(&duration, "duration", "d", "3m", "Test duration (e.g., 30s, 5m, 1h)")
+	rootCmd.Flags().StringVarP(&duration, "duration", "d", "30s", "Test duration (e.g., 30s, 5m, 1h)")
 	rootCmd.Flags().BoolVar(&noCleanup, "no-cleanup", false, "Keep test repositories for debugging")
 	rootCmd.Flags().BoolVarP(&initFlag, "init", "i", false, "Initialize e2e environment (create git repository and config files) and exit")
 	rootCmd.Flags().IntVarP(&verbose, "verbose", "v", 0, "Verbose level (0=error, 1=warn, 2=info, 3=debug)")
