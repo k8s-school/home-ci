@@ -307,8 +307,7 @@ jobs:
 
     - name: Create secret.yaml for dispatch
       run: |
-        mkdir -p /tmp/home-ci/e2e/dispatch-one-success
-        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-one-success/secret.yaml
+        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > secret.yaml
 
     - name: Run dispatch-one-success tests
       run: ./home-ci-e2e -v3 --type=dispatch-one-success
