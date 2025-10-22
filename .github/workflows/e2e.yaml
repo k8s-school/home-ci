@@ -353,15 +353,7 @@ jobs:
     - name: Create secret.yaml for dispatch
       run: |
         mkdir -p /tmp/home-ci/e2e/dispatch-all
-        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > /tmp/home-ci/e2e/dispatch-all/secret.yaml
-        echo "Created secret.yaml with $(wc -c < /tmp/home-ci/e2e/dispatch-all/secret.yaml) bytes"
-        # Verify the file content (without exposing token)
-        if grep -q "github_token:" /tmp/home-ci/e2e/dispatch-all/secret.yaml; then
-          echo "✓ secret.yaml contains github_token field"
-        else
-          echo "✗ secret.yaml missing github_token field"
-          cat /tmp/home-ci/e2e/dispatch-all/secret.yaml
-        fi
+        echo "github_token: ${{ secrets.GHA_DISPATCH_TOKEN }}" > secret.yaml
 
     - name: Run dispatch-all tests
       run: ./home-ci-e2e -v3 --type=dispatch-all
