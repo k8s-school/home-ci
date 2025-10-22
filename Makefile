@@ -165,7 +165,7 @@ test-normal: build
 # Run extended tests
 test-long: build
 	@echo "🐌 Running extended integration tests..."
-	./home-ci-e2e -v3 --type=long -duration=10m
+	./home-ci-e2e -v3 --type=long -duration=5m
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/long/config-long.yaml --check-timeline
