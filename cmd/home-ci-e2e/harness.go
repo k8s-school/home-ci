@@ -547,8 +547,11 @@ func (th *E2ETestHarness) analyzeTestResults() bool {
 			githubStatus := ""
 			if th.testType.isDispatchTest() && result.GitHubActionsNotified {
 				if !result.GitHubActionsSuccess {
-					status = "ERROR"
-					hasErrors = true
+					// For dispatch-no-token-file test, GitHub failure is expected and not an error
+					if th.testType != TestDispatchNoTokenFile {
+						status = "ERROR"
+						hasErrors = true
+					}
 					githubStatus = fmt.Sprintf(" | GitHub Dispatch: FAILED (%s)", result.GitHubActionsErrorMessage)
 				} else {
 					githubStatus = " | GitHub Dispatch: SUCCESS"
