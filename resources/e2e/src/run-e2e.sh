@@ -130,11 +130,11 @@ case "$EXPECTED_BEHAVIOR" in
         echo "Test will timeout" > "$DATA_DIR/${BRANCH_SAFE}-${COMMIT_HASH}_TIMEOUT.txt"
 
         # Run longer than the typical timeout (45+ seconds)
-        for i in {1..60}; do
+        for i in {1..3600}; do
             if [ $((i % 10)) -eq 0 ]; then
                 echo "Step $i/60... (this should timeout)"
             fi
-            sleep 1
+            sleep 3
 
             # Allow early termination for debugging
             if [ -f "/tmp/stop_e2e_test" ]; then
