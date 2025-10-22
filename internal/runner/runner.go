@@ -106,14 +106,6 @@ func (tr *TestRunner) Start() {
 	}
 }
 
-// executeTestJob handles a single test job with concurrency control (legacy method)
-func (tr *TestRunner) executeTestJob(job TestJob) {
-	// Acquire a slot in the semaphore
-	tr.semaphore <- struct{}{}
-	defer func() { <-tr.semaphore }() // Release the slot at the end
-
-	tr.executeTestJobWithoutSemaphore(job)
-}
 
 // executeTestJobWithoutSemaphore handles test execution without semaphore management
 // The semaphore is expected to be managed by the caller

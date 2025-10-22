@@ -82,57 +82,7 @@ func main() {
 	}
 }
 
-// showGitBranches displays git branches from the repository
-func showGitBranches(repoPath string) {
-	fmt.Println("")
-	fmt.Println("📊 Git branches:")
 
-	cmd := exec.Command("git", "branch", "-a")
-	cmd.Dir = repoPath
-	if output, err := cmd.Output(); err == nil {
-		fmt.Printf("%s", output)
-	} else {
-		fmt.Println("No branches found or git command failed")
-	}
-}
-
-// showProcessedCommits displays commits that have been processed by home-ci
-func showProcessedCommits(repoPath string) {
-	fmt.Println("")
-	fmt.Println("📋 Processed commits (JSON results):")
-
-	homeciDir := filepath.Join(repoPath, ".home-ci")
-	if _, err := os.Stat(homeciDir); os.IsNotExist(err) {
-		fmt.Println("No .home-ci directory found")
-		return
-	}
-
-	if files, err := filepath.Glob(filepath.Join(homeciDir, "*.json")); err == nil {
-		var commits []string
-		for _, file := range files {
-			if filepath.Base(file) != "state.json" {
-				// Extract branch and commit from filename like "20251016-192533_bugfix-timeout_a24b54c3.json"
-				basename := filepath.Base(file)
-				basename = strings.TrimSuffix(basename, ".json")
-				parts := strings.Split(basename, "_")
-				if len(parts) >= 3 {
-					branch := parts[1]
-					commit := parts[2]
-					commits = append(commits, fmt.Sprintf("%s-%s", branch, commit))
-				}
-			}
-		}
-		if len(commits) > 0 {
-			for _, commit := range commits {
-				fmt.Println(commit)
-			}
-		} else {
-			fmt.Println("No processed commits found")
-		}
-	} else {
-		fmt.Println("No processed commits found")
-	}
-}
 
 // showBranchesWithTestResults displays git branches with their associated test results
 func showBranchesWithTestResults(repoPath string) {
@@ -295,13 +245,6 @@ type TestResult struct {
 	GitHubActionsErrorMessage string        `json:"github_actions_error_message,omitempty"`
 }
 
-// TimeInterval represents a time interval for concurrency analysis
-type TimeInterval struct {
-	Branch    string
-	Commit    string
-	StartTime time.Time
-	EndTime   time.Time
-}
 
 // checkConcurrencyCompliance verifies that max_concurrent_runs was respected
 func checkConcurrencyCompliance(repoPath, configPath string) {
