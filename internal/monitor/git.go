@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"fmt"
-	"os/exec"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -29,9 +28,17 @@ func NewGitRepository(repoPath string) (*GitRepository, error) {
 
 func (gr *GitRepository) FetchRemote() error {
 	// Only used when fetch_remote is enabled
-	cmd := exec.Command("git", "fetch", "origin")
-	cmd.Dir = gr.repoPath
-	return cmd.Run()
+	remote, err := gr.repo.Remote("origin")
+	if err != nil {
+		return fmt.Errorf("failed to get remote 'origin': %w", err)
+	}
+
+	err = remote.Fetch(&git.FetchOptions{})
+	if err != nil && err != git.NoErrAlreadyUpToDate {
+		return fmt.Errorf("failed to fetch from remote: %w", err)
+	}
+
+	return nil
 }
 
 func (gr *GitRepository) GetBranches() ([]string, error) {
