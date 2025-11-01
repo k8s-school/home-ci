@@ -45,7 +45,7 @@ and verifies the CI system's behavior under different conditions.`,
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&testType, "type", "t", "normal", "Test type: success, fail, timeout, dispatch-one-success, dispatch-no-token-file, quick, dispatch-all, normal, long, concurrent-limit, continuous-ci")
+	rootCmd.Flags().StringVarP(&testType, "type", "t", "normal", "Test type: success, fail, timeout, dispatch-one-success, dispatch-no-token-file, quick, dispatch-all, normal, long, concurrent-limit, continuous-ci, cache-local, cache-remote")
 	rootCmd.Flags().StringVarP(&duration, "duration", "d", "30s", "Test duration (e.g., 30s, 5m, 1h)")
 	rootCmd.Flags().BoolVar(&noCleanup, "no-cleanup", false, "Keep test repositories for debugging")
 	rootCmd.Flags().BoolVarP(&initFlag, "init", "i", false, "Initialize e2e environment (create git repository and config files) and exit")
@@ -118,6 +118,8 @@ func runE2ETests() error {
 		durationVal = 120 * time.Second // Fixed duration for concurrent limit tests (increased for proper concurrency)
 	case TestContinuousCI:
 		durationVal = 75 * time.Second // Fixed duration for continuous CI test (optimized for speed)
+	case TestCacheLocal, TestCacheRemote:
+		durationVal = 45 * time.Second // Fixed duration for cache tests
 	// TestNormal and TestLong use user-specified duration
 	}
 
@@ -191,6 +193,9 @@ func runE2ETests() error {
 	case TestSuccess, TestFail, TestDispatchOneSuccess:
 		// For single commit tests, success means at least one test was detected and all results valid
 		success = th.totalTestsDetected > 0 && resultsValid
+	case TestCacheLocal, TestCacheRemote:
+		// For cache tests, success means tests were detected and cache behavior verified
+		success = th.totalTestsDetected > 0 && resultsValid && th.verifyCacheBehavior()
 	default:
 		// For multi-commit tests, success means tests were detected and all results valid
 		success = th.totalTestsDetected > 0 && resultsValid

@@ -66,6 +66,10 @@ func (th *E2ETestHarness) getConfigForTestType() (string, string, string) {
 		return "config-concurrent-limit.yaml", resources.ConfigConcurrentLimit, "Concurrent-Limit"
 	case TestContinuousCI:
 		return "config-continuous-ci.yaml", resources.ConfigContinuousCI, "Continuous-CI"
+	case TestCacheLocal:
+		return "config-cache-local.yaml", th.getCacheLocalConfig(), "Cache-Local"
+	case TestCacheRemote:
+		return "config-cache-remote.yaml", th.getCacheRemoteConfig(), "Cache-Remote"
 	default: // TestNormal
 		return "config-normal.yaml", resources.ConfigNormal, "Normal"
 	}
@@ -142,4 +146,48 @@ func (th *E2ETestHarness) getExpectedResult(config *TestExpectationConfig, branc
 
 	// Default to success if no pattern matches
 	return "success"
+}
+
+// getCacheLocalConfig returns config for cache-local test (fetchRemote: false)
+func (th *E2ETestHarness) getCacheLocalConfig() string {
+	return `repo_path: ` + th.testRepoPath + `
+check_interval: 5s
+test_script: ./e2e/run-e2e.sh
+max_concurrent_runs: 2
+options: ""
+max_commit_age: 240h
+test_timeout: 30s
+fetch_remote: false
+keep_time: 0
+cleanup:
+  after_e2e: true
+  script: ""
+github_actions_dispatch:
+  enabled: false
+  github_repo: ""
+  github_token_file: ""
+  dispatch_type: ""
+`
+}
+
+// getCacheRemoteConfig returns config for cache-remote test (fetchRemote: true)
+func (th *E2ETestHarness) getCacheRemoteConfig() string {
+	return `repo_path: ` + th.testRepoPath + `
+check_interval: 5s
+test_script: ./e2e/run-e2e.sh
+max_concurrent_runs: 2
+options: ""
+max_commit_age: 240h
+test_timeout: 30s
+fetch_remote: true
+keep_time: 0
+cleanup:
+  after_e2e: true
+  script: ""
+github_actions_dispatch:
+  enabled: false
+  github_repo: ""
+  github_token_file: ""
+  dispatch_type: ""
+`
 }

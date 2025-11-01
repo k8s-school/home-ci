@@ -139,7 +139,7 @@ func (m *Monitor) checkForUpdates() error {
 		return err
 	}
 
-	branches, err := m.gitRepo.GetBranches()
+	branches, err := m.gitRepo.GetBranches(m.config.FetchRemote, m.config.MaxCommitAge)
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}

@@ -40,6 +40,8 @@ func (th *E2ETestHarness) initializeGitRepo() error {
 		return th.createSingleCommitRepository()
 	case th.testType == TestQuick || th.testType == TestDispatchAll:
 		return th.createMultiTypeTestRepository()
+	case th.testType == TestCacheLocal || th.testType == TestCacheRemote:
+		return th.createCacheTestRepository()
 	default: // TestNormal, TestLong
 		return th.createMultiBranchRepository()
 	}
@@ -546,5 +548,126 @@ func (th *E2ETestHarness) createCommitWithMessage(branch, message string) error 
 	th.commitsCreated++
 	log.Printf("✅ Created commit on %s: %s", branch, message)
 
+	return nil
+}
+
+// createBranchWithCommit creates a new branch and makes a commit with the given message
+func (th *E2ETestHarness) createBranchWithCommit(branchName, commitMessage string) error {
+	// Create and checkout the new branch
+	if err := th.runGitCommand("git", "checkout", "-b", branchName); err != nil {
+		return fmt.Errorf("failed to create branch %s: %w", branchName, err)
+	}
+
+	// Create a file for this branch
+	safeBranchName := strings.ReplaceAll(branchName, "/", "_")
+	filename := fmt.Sprintf("file_%s_%d.txt", safeBranchName, time.Now().Unix())
+	filePath := filepath.Join(th.testRepoPath, filename)
+	content := fmt.Sprintf("Content for %s at %s\nCommit message: %s\n", branchName, time.Now().Format(time.RFC3339), commitMessage)
+
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to create file %s: %w", filename, err)
+	}
+
+	// Add and commit
+	if err := th.runGitCommand("git", "add", filename); err != nil {
+		return fmt.Errorf("failed to add file: %w", err)
+	}
+
+	if err := th.runGitCommand("git", "commit", "-m", commitMessage); err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	th.commitsCreated++
+	log.Printf("✅ Created branch %s with commit: %s", branchName, commitMessage)
+
+	return nil
+}
+
+// createCacheTestRepository creates a repository for testing cache behavior
+func (th *E2ETestHarness) createCacheTestRepository() error {
+	if err := th.createInitialFiles(); err != nil {
+		return err
+	}
+
+	if err := th.createInitialCommit(); err != nil {
+		return err
+	}
+
+	// Create local branches for cache-local test
+	if th.testType == TestCacheLocal {
+		log.Println("📂 Setting up cache-local test repository (local branches only)")
+
+		// Create a few local branches with recent commits
+		branches := []string{"feature/cache-test", "bugfix/local-issue"}
+		for _, branch := range branches {
+			if err := th.createBranchWithCommit(branch, fmt.Sprintf("Local commit on %s", branch)); err != nil {
+				return err
+			}
+		}
+
+		// Switch back to main
+		if err := th.runGitCommand("git", "checkout", "main"); err != nil {
+			return err
+		}
+
+		log.Println("✅ Cache-local repository setup complete (no remote branches)")
+	} else {
+		// TestCacheRemote: Create a repository that simulates having remote branches
+		log.Println("📂 Setting up cache-remote test repository (with remote branches)")
+
+		// First create some local branches
+		localBranches := []string{"local-feature"}
+		for _, branch := range localBranches {
+			if err := th.createBranchWithCommit(branch, fmt.Sprintf("Local commit on %s", branch)); err != nil {
+				return err
+			}
+		}
+
+		// Switch back to main for remote setup
+		if err := th.runGitCommand("git", "checkout", "main"); err != nil {
+			return err
+		}
+
+		// Create remote branches by first creating them locally, then simulating remote
+		remoteBranches := []string{"remote-feature", "remote-hotfix"}
+		for _, branch := range remoteBranches {
+			// Create the branch and commit
+			if err := th.createBranchWithCommit(branch, fmt.Sprintf("Remote commit on %s", branch)); err != nil {
+				return err
+			}
+
+			// Get the current commit hash
+			output, err := th.runGitCommandWithOutput("git", "rev-parse", "HEAD")
+			if err != nil {
+				return fmt.Errorf("failed to get commit hash: %w", err)
+			}
+			commitHash := strings.TrimSpace(output)
+
+			// Switch back to main before creating remote tracking branch
+			if err := th.runGitCommand("git", "checkout", "main"); err != nil {
+				return err
+			}
+
+			// Create remote tracking branch manually
+			remoteRefPath := filepath.Join(th.testRepoPath, ".git", "refs", "remotes", "origin", branch)
+			if err := os.MkdirAll(filepath.Dir(remoteRefPath), 0755); err != nil {
+				return fmt.Errorf("failed to create remote refs directory: %w", err)
+			}
+			if err := os.WriteFile(remoteRefPath, []byte(commitHash+"\n"), 0644); err != nil {
+				return fmt.Errorf("failed to create remote ref: %w", err)
+			}
+
+			// Delete the local branch (keeping only remote)
+			if err := th.runGitCommand("git", "branch", "-D", branch); err != nil {
+				log.Printf("Warning: failed to delete local branch %s: %v", branch, err)
+			}
+
+			log.Printf("✅ Created remote branch: origin/%s", branch)
+		}
+
+		log.Println("✅ Cache-remote repository setup complete (with simulated remote branches)")
+	}
+
+	th.displayRepositoryState()
 	return nil
 }

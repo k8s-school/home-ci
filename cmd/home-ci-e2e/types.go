@@ -24,6 +24,8 @@ const (
 	TestLong
 	TestConcurrentLimit
 	TestContinuousCI
+	TestCacheLocal
+	TestCacheRemote
 )
 
 var testTypeName = map[TestType]string{
@@ -38,6 +40,8 @@ var testTypeName = map[TestType]string{
 	TestLong:                "long",
 	TestConcurrentLimit:     "concurrent-limit",
 	TestContinuousCI:        "continuous-ci",
+	TestCacheLocal:          "cache-local",
+	TestCacheRemote:         "cache-remote",
 }
 
 // RunningTest represents a test currently in progress
