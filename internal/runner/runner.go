@@ -75,6 +75,7 @@ type TestExecution struct {
 	logFilePath    string
 	resultFilePath string
 	tempDir        string
+	projectDir     string
 	testResult     *TestResult
 	logFile        *os.File
 }
@@ -177,6 +178,18 @@ func (tr *TestRunner) newTestExecution(branch, commit string) *TestExecution {
 	logFileName := fmt.Sprintf("%s_%s_%s.log", timestamp, branchFile, commit[:8])
 	resultFileName := fmt.Sprintf("%s_%s_%s.json", timestamp, branchFile, commit[:8])
 
+	// Extract project name from repo path
+	projectName := filepath.Base(tr.config.RepoPath)
+	if projectName == "" || projectName == "." || projectName == "/" {
+		projectName = "project"
+	}
+	// Remove trailing slash and .git suffix if present
+	projectName = strings.TrimSuffix(projectName, "/")
+	projectName = strings.TrimSuffix(projectName, ".git")
+
+	tempDir := fmt.Sprintf("/tmp/home-ci/repos/%s-%s-%s", branchFile, commit[:8], timestamp)
+	projectDir := filepath.Join(tempDir, projectName)
+
 	return &TestExecution{
 		runner:         tr,
 		branch:         branch,
@@ -184,7 +197,8 @@ func (tr *TestRunner) newTestExecution(branch, commit string) *TestExecution {
 		startTime:      startTime,
 		logFilePath:    filepath.Join(tr.logDir, logFileName),
 		resultFilePath: filepath.Join(tr.logDir, resultFileName),
-		tempDir:        fmt.Sprintf("/tmp/home-ci/repos/%s-%s-%s", branchFile, commit[:8], timestamp),
+		tempDir:        tempDir,
+		projectDir:     projectDir,
 		testResult: &TestResult{
 			Branch:    branch,
 			Commit:    commit,
@@ -258,7 +272,7 @@ func (te *TestExecution) setupRepository() error {
 	// Log repository setup
 	fmt.Fprintf(te.logFile, "=== Cloning Repository ===\n")
 	fmt.Fprintf(te.logFile, "Source: %s\n", te.runner.config.RepoPath)
-	fmt.Fprintf(te.logFile, "Destination: %s\n", te.tempDir)
+	fmt.Fprintf(te.logFile, "Destination: %s\n", te.projectDir)
 	fmt.Fprintf(te.logFile, "Branch: %s\n", te.branch)
 	fmt.Fprintf(te.logFile, "Commit: %s\n", te.commit)
 	fmt.Fprintf(te.logFile, "========================\n\n")
@@ -272,14 +286,14 @@ func (te *TestExecution) cloneAndCheckoutRepository() error {
 	branchRefName := plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", cleanBranchName))
 
 	// Clone the repository with single branch
-	repo, err := git.PlainClone(te.tempDir, false, &git.CloneOptions{
+	repo, err := git.PlainClone(te.projectDir, false, &git.CloneOptions{
 		URL:           te.runner.config.RepoPath,
 		ReferenceName: branchRefName,
 		SingleBranch:  true,
 	})
 	if err != nil {
 		fmt.Fprintf(te.logFile, "Failed to clone repository: %v\n", err)
-		return fmt.Errorf("failed to clone repository to %s: %w", te.tempDir, err)
+		return fmt.Errorf("failed to clone repository to %s: %w", te.projectDir, err)
 	}
 
 	fmt.Fprintf(te.logFile, "Repository cloned successfully (single branch: %s)\n", cleanBranchName)
@@ -322,9 +336,9 @@ func (te *TestExecution) executeTest() error {
 	defer testCancel()
 
 	// Setup command
-	scriptPath := filepath.Join(te.tempDir, te.runner.config.TestScript)
+	scriptPath := filepath.Join(te.projectDir, te.runner.config.TestScript)
 	cmd := exec.CommandContext(testCtx, scriptPath, args...)
-	cmd.Dir = te.tempDir
+	cmd.Dir = te.projectDir
 	cmd.Stdout = io.MultiWriter(os.Stdout, te.logFile)
 	cmd.Stderr = io.MultiWriter(os.Stderr, te.logFile)
 
@@ -353,14 +367,14 @@ func (te *TestExecution) parseCommandArgs() []string {
 // logTestExecution logs the test command and parameters
 func (te *TestExecution) logTestExecution(scriptPath string, args []string) {
 	fullCommand := fmt.Sprintf("%s %s", scriptPath, strings.Join(args, " "))
-	slog.Debug("Executing test command", "command", fullCommand, "working_dir", te.tempDir)
+	slog.Debug("Executing test command", "command", fullCommand, "working_dir", te.projectDir)
 
 	fmt.Fprintf(te.logFile, "=== CI Test Run ===\n")
 	fmt.Fprintf(te.logFile, "Branch: %s\n", te.branch)
 	fmt.Fprintf(te.logFile, "Commit: %s\n", te.commit)
 	fmt.Fprintf(te.logFile, "Timestamp: %s\n", time.Now().Format(time.RFC3339))
 	fmt.Fprintf(te.logFile, "Command: %s\n", fullCommand)
-	fmt.Fprintf(te.logFile, "Working Directory: %s\n", te.tempDir)
+	fmt.Fprintf(te.logFile, "Working Directory: %s\n", te.projectDir)
 	fmt.Fprintf(te.logFile, "Timeout: %s\n", te.runner.config.TestTimeout)
 	fmt.Fprintf(te.logFile, "==================\n\n")
 }
@@ -434,17 +448,17 @@ func (te *TestExecution) runCleanupScript() error {
 
 	fmt.Fprintf(te.logFile, "\n=== Running Cleanup Script ===\n")
 	fmt.Fprintf(te.logFile, "Script: %s\n", te.runner.config.Cleanup.Script)
-	fmt.Fprintf(te.logFile, "Working Directory: %s\n", te.tempDir)
+	fmt.Fprintf(te.logFile, "Working Directory: %s\n", te.projectDir)
 	fmt.Fprintf(te.logFile, "==============================\n\n")
 
-	scriptPath := filepath.Join(te.tempDir, te.runner.config.Cleanup.Script)
+	scriptPath := filepath.Join(te.projectDir, te.runner.config.Cleanup.Script)
 
 	// Create context with timeout
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), te.runner.config.TestTimeout)
 	defer cleanupCancel()
 
 	cmd := exec.CommandContext(cleanupCtx, scriptPath)
-	cmd.Dir = te.tempDir
+	cmd.Dir = te.projectDir
 	cmd.Stdout = io.MultiWriter(os.Stdout, te.logFile)
 	cmd.Stderr = io.MultiWriter(os.Stderr, te.logFile)
 
