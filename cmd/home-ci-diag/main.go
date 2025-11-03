@@ -207,23 +207,45 @@ func showHomeciState(repoPath string) {
 	fmt.Println("")
 	fmt.Println("🏠 Home-CI State:")
 
-	stateFile := filepath.Join(repoPath, ".home-ci", "state.json")
+	// Try to read config to get state directory
+	config, err := readConfig(configPath)
+	if err != nil || config.StateDir == "" || config.RepoName == "" {
+		// Fallback to old location
+		stateFile := filepath.Join(repoPath, ".home-ci", "state.json")
+		if _, err := os.Stat(stateFile); os.IsNotExist(err) {
+			fmt.Println("No state.json found")
+			return
+		}
+
+		if content, err := os.ReadFile(stateFile); err == nil {
+			fmt.Printf("%s", content)
+		} else {
+			fmt.Printf("Error reading state.json: %v", err)
+		}
+		return
+	}
+
+	// Use new architecture location
+	stateFile := filepath.Join(config.StateDir, config.RepoName+".json")
 	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
-		fmt.Println("No state.json found")
+		fmt.Println("No state file found")
 		return
 	}
 
 	if content, err := os.ReadFile(stateFile); err == nil {
 		fmt.Printf("%s", content)
 	} else {
-		fmt.Printf("Error reading state.json: %v", err)
+		fmt.Printf("Error reading state file: %v", err)
 	}
 }
 
 // Config represents the home-ci configuration structure
 type Config struct {
 	RepoPath          string `yaml:"repo_path"`
+	RepoName          string `yaml:"repo_name"`
 	MaxConcurrentRuns int    `yaml:"max_concurrent_runs"`
+	StateDir          string `yaml:"state_dir"`
+	LogDir            string `yaml:"log_dir"`
 }
 
 // TestResult represents a test execution result
@@ -314,8 +336,45 @@ func readConfig(configPath string) (*Config, error) {
 	return &config, nil
 }
 
-// readTestResults reads all test result JSON files from the .home-ci directory
+// readTestResults reads all test result JSON files from the new architecture directories
 func readTestResults(repoPath string) ([]TestResult, error) {
+	// Try to read config to get log directory
+	config, err := readConfig(configPath)
+	if err != nil || config.LogDir == "" || config.RepoName == "" {
+		// Fallback to old location
+		return readTestResultsOld(repoPath)
+	}
+
+	// Use new architecture location: log_dir/repo_name/results/
+	resultsDir := filepath.Join(config.LogDir, config.RepoName, "results")
+	files, err := filepath.Glob(filepath.Join(resultsDir, "*.json"))
+	if err != nil {
+		// If new location fails, try fallback
+		return readTestResultsOld(repoPath)
+	}
+
+	var results []TestResult
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			fmt.Printf("⚠️  Warning: failed to read %s: %v\n", file, err)
+			continue
+		}
+
+		var result TestResult
+		if err := json.Unmarshal(data, &result); err != nil {
+			fmt.Printf("⚠️  Warning: failed to parse %s: %v\n", file, err)
+			continue
+		}
+
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+// readTestResultsOld reads test results from the old .home-ci directory (fallback)
+func readTestResultsOld(repoPath string) ([]TestResult, error) {
 	homeciDir := filepath.Join(repoPath, ".home-ci")
 
 	files, err := filepath.Glob(filepath.Join(homeciDir, "*.json"))
