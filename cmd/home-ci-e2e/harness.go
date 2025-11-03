@@ -361,8 +361,25 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 
 // countTestsFromResults counts the number of tests by counting JSON result files
 func (th *E2ETestHarness) countTestsFromResults() int {
+	// Check centralized logs first (new architecture)
+	repoName := "repo"
+	resultsDir := filepath.Join("/tmp/home-ci/logs", repoName, "results")
+	files, err := os.ReadDir(resultsDir)
+	if err == nil {
+		count := 0
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+				count++
+			}
+		}
+		if count > 0 {
+			return count
+		}
+	}
+
+	// Fallback to old architecture (local .home-ci directory)
 	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-	files, err := os.ReadDir(homeCIDir)
+	files, err = os.ReadDir(homeCIDir)
 	if err != nil {
 		return 0
 	}
