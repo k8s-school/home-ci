@@ -7,6 +7,10 @@ repo_name: "fink-broker"
 # state_dir: "/var/lib/home-ci/state"
 # workspace_dir: "/var/lib/home-ci/workspaces"
 # log_dir: "/var/log/home-ci"
+cache_dir: "/tmp/home-ci/cache"
+state_dir: "/tmp/home-ci/state"
+workspace_dir: "/tmp/home-ci/workspaces"
+log_dir: "/tmp/home-ci/log"
 
 # Test configuration
 check_interval: 30s
