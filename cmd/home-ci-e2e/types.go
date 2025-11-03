@@ -61,6 +61,7 @@ type E2ETestHarness struct {
 	homeCIContext context.Context
 	homeCICancel  context.CancelFunc
 	noCleanup     bool // Skip cleanup for debugging
+	startTime     time.Time // When this e2e test harness started
 
 	// Statistics
 	commitsCreated     int

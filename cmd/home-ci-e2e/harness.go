@@ -29,6 +29,7 @@ func NewE2ETestHarness(testType TestType, duration time.Duration, noCleanup bool
 		testRepoPath: repoPath,
 		tempRunDir:   tempRunDir,
 		noCleanup:    noCleanup,
+		startTime:    time.Now(),
 	}
 }
 
@@ -78,10 +79,38 @@ func (th *E2ETestHarness) writeFileFromResource(content, filePath string, execut
 	return nil
 }
 
+// cleanupGlobalState removes all home-ci generated data from previous test runs
+func (th *E2ETestHarness) cleanupGlobalState() error {
+	// List of global directories that accumulate test data
+	globalDirs := []string{
+		"/tmp/home-ci/state",
+		"/tmp/home-ci/cache",
+		"/tmp/home-ci/logs",
+		"/tmp/home-ci/workspaces",
+		"/tmp/home-ci/e2e/data", // Clean e2e data directory too
+	}
+
+	for _, dir := range globalDirs {
+		if _, err := os.Stat(dir); err == nil {
+			slog.Debug("Cleaning up global home-ci directory", "dir", dir)
+			if err := os.RemoveAll(dir); err != nil {
+				return fmt.Errorf("failed to remove global directory %s: %w", dir, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // setupTestRepo creates a test repository using the embedded setup script or manual setup
 func (th *E2ETestHarness) setupTestRepo() error {
 	if th.testType != TestTimeout {
 		slog.Info("🚀 Setting up test environment", "dir", th.tempRunDir)
+	}
+
+	// Clean up global state first
+	if err := th.cleanupGlobalState(); err != nil {
+		return fmt.Errorf("failed to cleanup global state: %w", err)
 	}
 
 	// Clean up and initialize the test type specific directory
@@ -361,15 +390,17 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 
 // countTestsFromResults counts the number of tests by counting JSON result files
 func (th *E2ETestHarness) countTestsFromResults() int {
-	// Check centralized logs first (new architecture)
-	repoName := "repo"
-	resultsDir := filepath.Join("/tmp/home-ci/logs", repoName, "results")
-	files, err := os.ReadDir(resultsDir)
-	if err == nil {
+	// Check isolated test logs (new architecture with test-specific directories)
+	testLogDir := filepath.Join(th.tempRunDir, "logs")
+	if files, err := os.ReadDir(testLogDir); err == nil {
 		count := 0
 		for _, file := range files {
 			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-				count++
+				filePath := filepath.Join(testLogDir, file.Name())
+				fileInfo, err := os.Stat(filePath)
+				if err == nil && fileInfo.ModTime().After(th.startTime) {
+					count++
+				}
 			}
 		}
 		if count > 0 {
@@ -379,7 +410,7 @@ func (th *E2ETestHarness) countTestsFromResults() int {
 
 	// Fallback to old architecture (local .home-ci directory)
 	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-	files, err = os.ReadDir(homeCIDir)
+	files, err := os.ReadDir(homeCIDir)
 	if err != nil {
 		return 0
 	}

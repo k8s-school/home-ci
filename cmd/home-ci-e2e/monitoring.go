@@ -82,16 +82,35 @@ func (th *E2ETestHarness) checkStateForTimeout() error {
 		return nil // Already detected
 	}
 
-	// Check JSON result files for timeout indication
-	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-	files, err := os.ReadDir(homeCIDir)
+	// Check JSON result files for timeout indication in new architecture location
+	repoName := "timeout-repo" // Use the repo name from config
+	resultsDir := filepath.Join("/tmp/home-ci/e2e/timeout/logs", repoName, "results")
+	files, err := os.ReadDir(resultsDir)
 	if err != nil {
-		return nil // No files yet
+		// Fallback to old location
+		homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+		files, err = os.ReadDir(homeCIDir)
+		if err != nil {
+			return nil // No files yet
+		}
+
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+				jsonPath := filepath.Join(homeCIDir, file.Name())
+				if th.checkJSONForTimeout(jsonPath) {
+					th.timeoutDetected = true
+					log.Printf("🕐 Timeout detected: found timeout in result file %s", file.Name())
+					return nil
+				}
+			}
+		}
+		return nil
 	}
 
+	// Check new architecture location
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-			jsonPath := filepath.Join(homeCIDir, file.Name())
+			jsonPath := filepath.Join(resultsDir, file.Name())
 			if th.checkJSONForTimeout(jsonPath) {
 				th.timeoutDetected = true
 				log.Printf("🕐 Timeout detected: found timeout in result file %s", file.Name())
