@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -143,10 +144,7 @@ func (rc *RepositoryCache) checkoutBranchCommit(repo *git.Repository, branch, co
 	})
 	if err != nil {
 		// If direct commit checkout fails, try to checkout branch first then commit
-		cleanBranchName := branch
-		if cleanBranchName[:7] == "origin/" {
-			cleanBranchName = cleanBranchName[7:]
-		}
+		cleanBranchName := strings.TrimPrefix(branch, "origin/")
 
 		branchRef := plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", cleanBranchName))
 
