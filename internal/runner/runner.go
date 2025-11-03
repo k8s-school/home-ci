@@ -12,8 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/k8s-school/home-ci/internal/cache"
 	"github.com/k8s-school/home-ci/internal/config"
 )
 
@@ -64,6 +63,7 @@ type TestRunner struct {
 	ctx          context.Context
 	semaphore    chan struct{} // Semaphore to limit concurrency
 	stateManager StateManager  // State manager for tracking running tests
+	repoCache    *cache.RepositoryCache // Repository cache manager
 }
 
 // TestExecution encapsulates a single test execution context
@@ -74,14 +74,22 @@ type TestExecution struct {
 	startTime      time.Time
 	logFilePath    string
 	resultFilePath string
-	tempDir        string
-	projectDir     string
+	workspaceDir   string  // Root workspace directory for this test
+	projectDir     string  // Project directory within workspace
 	testResult     *TestResult
 	logFile        *os.File
 }
 
 // NewTestRunner creates a new test runner instance
 func NewTestRunner(cfg config.Config, configPath, logDir string, ctx context.Context, stateManager StateManager) *TestRunner {
+	// Create repository cache manager
+	repoOrigin := cfg.RepoOrigin
+	if repoOrigin == "" {
+		repoOrigin = cfg.RepoPath // Fallback for backward compatibility
+	}
+
+	repoCache := cache.NewRepositoryCache(cfg.CacheDir, cfg.RepoName, repoOrigin)
+
 	return &TestRunner{
 		config:       cfg,
 		configPath:   configPath,
@@ -90,6 +98,7 @@ func NewTestRunner(cfg config.Config, configPath, logDir string, ctx context.Con
 		ctx:          ctx,
 		semaphore:    make(chan struct{}, cfg.MaxConcurrentRuns),
 		stateManager: stateManager,
+		repoCache:    repoCache,
 	}
 }
 
@@ -175,29 +184,28 @@ func (tr *TestRunner) newTestExecution(branch, commit string) *TestExecution {
 	timestamp := startTime.Format("20060102-150405")
 	branchFile := strings.ReplaceAll(branch, "/", "-")
 
-	logFileName := fmt.Sprintf("%s_%s_%s.log", timestamp, branchFile, commit[:8])
-	resultFileName := fmt.Sprintf("%s_%s_%s.json", timestamp, branchFile, commit[:8])
+	// Create unique workspace ID
+	workspaceID := fmt.Sprintf("%s_%s_%s", branchFile, commit[:8], timestamp)
 
-	// Extract project name from repo path
-	projectName := filepath.Base(tr.config.RepoPath)
-	if projectName == "" || projectName == "." || projectName == "/" {
-		projectName = "project"
-	}
-	// Remove trailing slash and .git suffix if present
-	projectName = strings.TrimSuffix(projectName, "/")
-	projectName = strings.TrimSuffix(projectName, ".git")
+	// Set up paths using new directory structure
+	logFileName := fmt.Sprintf("%s.log", workspaceID)
+	resultFileName := fmt.Sprintf("%s.json", workspaceID)
 
-	tempDir := fmt.Sprintf("/tmp/home-ci/repos/%s-%s-%s", branchFile, commit[:8], timestamp)
-	projectDir := filepath.Join(tempDir, projectName)
+	// Create workspace directory in the configured workspace directory
+	workspaceDir := filepath.Join(tr.config.WorkspaceDir, workspaceID)
+	projectDir := filepath.Join(workspaceDir, tr.config.RepoName)
+
+	// Create log directory for this repository if it doesn't exist
+	repoLogDir := filepath.Join(tr.config.LogDir, tr.config.RepoName)
 
 	return &TestExecution{
 		runner:         tr,
 		branch:         branch,
 		commit:         commit,
 		startTime:      startTime,
-		logFilePath:    filepath.Join(tr.logDir, logFileName),
-		resultFilePath: filepath.Join(tr.logDir, resultFileName),
-		tempDir:        tempDir,
+		logFilePath:    filepath.Join(repoLogDir, "tests", logFileName),
+		resultFilePath: filepath.Join(repoLogDir, "results", resultFileName),
+		workspaceDir:   workspaceDir,
 		projectDir:     projectDir,
 		testResult: &TestResult{
 			Branch:    branch,
@@ -226,14 +234,26 @@ func (te *TestExecution) cleanup() {
 		te.runner.stateManager.SaveState()
 	}
 
-	// Clean up temp directory if immediate cleanup is needed
-	if te.runner.config.KeepTime == 0 && te.tempDir != "" {
-		os.RemoveAll(te.tempDir)
+	// Clean up workspace directory if immediate cleanup is needed
+	if te.runner.config.KeepTime == 0 && te.workspaceDir != "" {
+		os.RemoveAll(te.workspaceDir)
 	}
 }
 
 // setupLogging creates and configures the log file
 func (te *TestExecution) setupLogging() error {
+	// Ensure log directory structure exists
+	logDir := filepath.Dir(te.logFilePath)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory %s: %w", logDir, err)
+	}
+
+	// Also ensure result directory exists
+	resultDir := filepath.Dir(te.resultFilePath)
+	if err := os.MkdirAll(resultDir, 0755); err != nil {
+		return fmt.Errorf("failed to create result directory %s: %w", resultDir, err)
+	}
+
 	logFile, err := os.Create(te.logFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to create log file %s: %w", te.logFilePath, err)
@@ -263,65 +283,54 @@ func (te *TestExecution) registerRunningTest() error {
 
 // setupRepository clones and prepares the repository for testing
 func (te *TestExecution) setupRepository() error {
-	if err := os.MkdirAll(te.tempDir, 0755); err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
+	// Create workspace directory
+	if err := os.MkdirAll(te.workspaceDir, 0755); err != nil {
+		return fmt.Errorf("failed to create workspace directory: %w", err)
 	}
 
-	slog.Debug("Created temporary repository", "temp_dir", te.tempDir)
+	// Ensure repository cache is up to date
+	if err := te.runner.repoCache.EnsureCache(); err != nil {
+		return fmt.Errorf("failed to ensure repository cache: %w", err)
+	}
+
+	slog.Debug("Created workspace for test execution",
+		"workspace", te.workspaceDir,
+		"project_dir", te.projectDir,
+		"repo", te.runner.config.RepoName)
 
 	// Log repository setup
-	fmt.Fprintf(te.logFile, "=== Cloning Repository ===\n")
-	fmt.Fprintf(te.logFile, "Source: %s\n", te.runner.config.RepoPath)
-	fmt.Fprintf(te.logFile, "Destination: %s\n", te.projectDir)
+	fmt.Fprintf(te.logFile, "=== Setting up Repository Workspace ===\n")
+	fmt.Fprintf(te.logFile, "Repository: %s\n", te.runner.config.RepoName)
+	fmt.Fprintf(te.logFile, "Origin: %s\n", te.runner.repoCache.RepoOrigin)
+	fmt.Fprintf(te.logFile, "Cache: %s\n", te.runner.repoCache.GetCachePath())
+	fmt.Fprintf(te.logFile, "Workspace: %s\n", te.workspaceDir)
+	fmt.Fprintf(te.logFile, "Project Directory: %s\n", te.projectDir)
 	fmt.Fprintf(te.logFile, "Branch: %s\n", te.branch)
 	fmt.Fprintf(te.logFile, "Commit: %s\n", te.commit)
-	fmt.Fprintf(te.logFile, "========================\n\n")
+	fmt.Fprintf(te.logFile, "========================================\n\n")
 
-	return te.cloneAndCheckoutRepository()
+	return te.cloneFromCacheToWorkspace()
 }
 
-// cloneAndCheckoutRepository performs the git operations
-func (te *TestExecution) cloneAndCheckoutRepository() error {
-	cleanBranchName := strings.TrimPrefix(te.branch, "origin/")
-	branchRefName := plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", cleanBranchName))
-
-	// Clone the repository with single branch
-	repo, err := git.PlainClone(te.projectDir, false, &git.CloneOptions{
-		URL:           te.runner.config.RepoPath,
-		ReferenceName: branchRefName,
-		SingleBranch:  true,
-	})
+// cloneFromCacheToWorkspace clones the repository from cache to workspace
+func (te *TestExecution) cloneFromCacheToWorkspace() error {
+	// Use the cache to clone to workspace
+	err := te.runner.repoCache.CloneToWorkspace(te.projectDir, te.branch, te.commit)
 	if err != nil {
-		fmt.Fprintf(te.logFile, "Failed to clone repository: %v\n", err)
-		return fmt.Errorf("failed to clone repository to %s: %w", te.projectDir, err)
+		fmt.Fprintf(te.logFile, "Failed to clone from cache to workspace: %v\n", err)
+		return fmt.Errorf("failed to clone from cache to workspace: %w", err)
 	}
 
-	fmt.Fprintf(te.logFile, "Repository cloned successfully (single branch: %s)\n", cleanBranchName)
+	fmt.Fprintf(te.logFile, "Repository cloned successfully from cache\n")
+	fmt.Fprintf(te.logFile, "Branch: %s\n", te.branch)
+	fmt.Fprintf(te.logFile, "Commit: %s\n", te.commit)
+	fmt.Fprintf(te.logFile, "========================================\n\n")
 
-	// Get worktree and checkout specific commit
-	worktree, err := repo.Worktree()
-	if err != nil {
-		fmt.Fprintf(te.logFile, "Failed to get worktree: %v\n", err)
-		return fmt.Errorf("failed to get worktree: %w", err)
-	}
-
-	// Checkout the branch
-	if err := worktree.Checkout(&git.CheckoutOptions{Branch: branchRefName}); err != nil {
-		fmt.Fprintf(te.logFile, "Failed to checkout branch %s: %v\n", cleanBranchName, err)
-		return fmt.Errorf("failed to checkout branch %s: %w", cleanBranchName, err)
-	}
-
-	fmt.Fprintf(te.logFile, "Checked out branch %s successfully\n", cleanBranchName)
-
-	// Reset to specific commit
-	commitHash := plumbing.NewHash(te.commit)
-	if err := worktree.Reset(&git.ResetOptions{Commit: commitHash, Mode: git.HardReset}); err != nil {
-		fmt.Fprintf(te.logFile, "Failed to reset to commit %s: %v\n", te.commit, err)
-		return fmt.Errorf("failed to reset to commit %s: %w", te.commit, err)
-	}
-
-	fmt.Fprintf(te.logFile, "Reset to commit %s successfully\n", te.commit)
-	fmt.Fprintf(te.logFile, "========================\n\n")
+	slog.Debug("Repository workspace setup completed",
+		"repo", te.runner.config.RepoName,
+		"branch", te.branch,
+		"commit", te.commit[:8],
+		"workspace", te.workspaceDir)
 
 	return nil
 }

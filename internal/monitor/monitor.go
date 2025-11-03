@@ -41,14 +41,16 @@ type Monitor struct {
 // CleanupManager handles repository cleanup operations
 type CleanupManager struct {
 	keepTime     time.Duration
+	workspaceDir string
 	ctx          context.Context
 }
 
 // NewCleanupManager creates a new cleanup manager
-func NewCleanupManager(keepTime time.Duration, ctx context.Context) *CleanupManager {
+func NewCleanupManager(keepTime time.Duration, workspaceDir string, ctx context.Context) *CleanupManager {
 	return &CleanupManager{
-		keepTime: keepTime,
-		ctx:      ctx,
+		keepTime:     keepTime,
+		workspaceDir: workspaceDir,
+		ctx:          ctx,
 	}
 }
 
@@ -71,7 +73,7 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 	stateManager := NewStateManager(stateFile)
 
 	testRunner := runner.NewTestRunner(cfg, configPath, logDir, ctx, stateManager)
-	cleanupMgr := NewCleanupManager(cfg.KeepTime, ctx)
+	cleanupMgr := NewCleanupManager(cfg.KeepTime, cfg.WorkspaceDir, ctx)
 
 	m := &Monitor{
 		config:       cfg,
@@ -264,16 +266,16 @@ func (cm *CleanupManager) calculateCleanupInterval() time.Duration {
 	return cleanupInterval
 }
 
-// cleanupOldRepositories removes repository directories older than KeepTime
+// cleanupOldRepositories removes workspace directories older than KeepTime
 func (cm *CleanupManager) cleanupOldRepositories() {
-	// Check if the directory exists
-	if _, err := os.Stat(tmpHomeCIRepos); os.IsNotExist(err) {
+	// Check if the workspace directory exists
+	if _, err := os.Stat(cm.workspaceDir); os.IsNotExist(err) {
 		return // Nothing to clean up
 	}
 
-	entries, err := os.ReadDir(tmpHomeCIRepos)
+	entries, err := os.ReadDir(cm.workspaceDir)
 	if err != nil {
-		slog.Debug("Failed to read repository directory", "dir", tmpHomeCIRepos, "error", err)
+		slog.Debug("Failed to read workspace directory", "dir", cm.workspaceDir, "error", err)
 		return
 	}
 
@@ -281,8 +283,11 @@ func (cm *CleanupManager) cleanupOldRepositories() {
 	cleaned := cm.cleanupDirectories(entries, cutoffTime)
 
 	if cleaned > 0 {
-		slog.Debug("Cleanup completed", "removed_directories", cleaned, "keep_time", cm.keepTime)
+		slog.Debug("Workspace cleanup completed", "removed_workspaces", cleaned, "keep_time", cm.keepTime, "workspace_dir", cm.workspaceDir)
 	}
+
+	// Also cleanup legacy /tmp/home-ci/repos directory if it exists
+	cm.cleanupLegacyDirectories()
 }
 
 // cleanupDirectories processes directory entries for cleanup
@@ -294,7 +299,7 @@ func (cm *CleanupManager) cleanupDirectories(entries []os.DirEntry, cutoffTime t
 			continue
 		}
 
-		dirPath := filepath.Join(tmpHomeCIRepos, entry.Name())
+		dirPath := filepath.Join(cm.workspaceDir, entry.Name())
 		if cm.shouldRemoveDirectory(dirPath, cutoffTime) {
 			cleaned++
 		}
@@ -317,10 +322,63 @@ func (cm *CleanupManager) shouldRemoveDirectory(dirPath string, cutoffTime time.
 	}
 
 	age := time.Since(dirInfo.ModTime())
-	slog.Debug("Removing old repository directory", "dir", dirPath, "age", age.Truncate(time.Minute))
+	slog.Debug("Removing old workspace directory", "dir", dirPath, "age", age.Truncate(time.Minute))
 
 	if err := os.RemoveAll(dirPath); err != nil {
-		slog.Debug("Failed to remove old repository directory", "dir", dirPath, "error", err)
+		slog.Debug("Failed to remove old workspace directory", "dir", dirPath, "error", err)
+		return false
+	}
+
+	return true
+}
+
+// cleanupLegacyDirectories cleans up the old /tmp/home-ci/repos directory
+func (cm *CleanupManager) cleanupLegacyDirectories() {
+	legacyDir := tmpHomeCIRepos
+	if _, err := os.Stat(legacyDir); os.IsNotExist(err) {
+		return // Nothing to clean up
+	}
+
+	entries, err := os.ReadDir(legacyDir)
+	if err != nil {
+		return // Can't read, skip
+	}
+
+	cutoffTime := time.Now().Add(-cm.keepTime)
+	cleaned := 0
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		dirPath := filepath.Join(legacyDir, entry.Name())
+		if cm.shouldRemoveLegacyDirectory(dirPath, cutoffTime) {
+			cleaned++
+		}
+	}
+
+	if cleaned > 0 {
+		slog.Debug("Legacy cleanup completed", "removed_directories", cleaned, "legacy_dir", legacyDir)
+	}
+}
+
+// shouldRemoveLegacyDirectory checks if a legacy directory should be removed
+func (cm *CleanupManager) shouldRemoveLegacyDirectory(dirPath string, cutoffTime time.Time) bool {
+	dirInfo, err := os.Stat(dirPath)
+	if err != nil {
+		return false
+	}
+
+	if !dirInfo.ModTime().Before(cutoffTime) {
+		return false
+	}
+
+	age := time.Since(dirInfo.ModTime())
+	slog.Debug("Removing legacy repository directory", "dir", dirPath, "age", age.Truncate(time.Minute))
+
+	if err := os.RemoveAll(dirPath); err != nil {
+		slog.Debug("Failed to remove legacy directory", "dir", dirPath, "error", err)
 		return false
 	}
 

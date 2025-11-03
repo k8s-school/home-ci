@@ -1,4 +1,14 @@
-repo_path: "/home/fjammes/src/github.com/astrolabsoftware/fink-broker/"
+# Repository configuration
+repo_origin: "https://github.com/astrolabsoftware/fink-broker.git"
+repo_name: "fink-broker"
+
+# Optional: override default directories (will use /tmp fallbacks for development)
+# cache_dir: "/var/cache/home-ci"
+# state_dir: "/var/lib/home-ci/state"
+# workspace_dir: "/var/lib/home-ci/workspaces"
+# log_dir: "/var/log/home-ci"
+
+# Test configuration
 check_interval: 30s
 test_script: "e2e/run.sh"
 options: "-c"
