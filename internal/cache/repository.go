@@ -52,13 +52,25 @@ func (rc *RepositoryCache) EnsureCache() error {
 
 // createCache creates a new bare clone of the repository
 func (rc *RepositoryCache) createCache() error {
-	// Create bare clone
-	_, err := git.PlainClone(rc.cachePath, true, &git.CloneOptions{
-		URL:      rc.RepoOrigin,
-		Progress: os.Stdout,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to clone repository %s to cache %s: %w", rc.RepoOrigin, rc.cachePath, err)
+	// Check if the origin is a local path (not a remote URL)
+	if isLocalPath(rc.RepoOrigin) {
+		// For local repositories, create bare clone directly
+		_, err := git.PlainClone(rc.cachePath, true, &git.CloneOptions{
+			URL:      rc.RepoOrigin,
+			Progress: os.Stdout,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to clone local repository %s to cache %s: %w", rc.RepoOrigin, rc.cachePath, err)
+		}
+	} else {
+		// For remote repositories, create bare clone with proper remotes
+		_, err := git.PlainClone(rc.cachePath, true, &git.CloneOptions{
+			URL:      rc.RepoOrigin,
+			Progress: os.Stdout,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to clone repository %s to cache %s: %w", rc.RepoOrigin, rc.cachePath, err)
+		}
 	}
 
 	slog.Info("Repository cache created", "repo", rc.RepoName, "origin", rc.RepoOrigin, "cache", rc.cachePath)
@@ -90,8 +102,8 @@ func (rc *RepositoryCache) updateCache() error {
 		}
 	}
 
-	// Only fetch if origin remote exists
-	if hasOrigin {
+	// Only fetch if origin remote exists and this is not a local repository
+	if hasOrigin && !isLocalPath(rc.RepoOrigin) {
 		err = repo.Fetch(&git.FetchOptions{
 			RemoteName: "origin",
 			RefSpecs: []config.RefSpec{
@@ -107,6 +119,8 @@ func (rc *RepositoryCache) updateCache() error {
 
 	if err == git.NoErrAlreadyUpToDate {
 		slog.Debug("Repository cache is already up to date", "repo", rc.RepoName)
+	} else if isLocalPath(rc.RepoOrigin) {
+		slog.Debug("Skipping remote fetch for local repository", "repo", rc.RepoName)
 	} else {
 		slog.Info("Repository cache updated", "repo", rc.RepoName)
 	}
@@ -183,6 +197,26 @@ func (rc *RepositoryCache) checkoutBranchCommit(repo *git.Repository, branch, co
 	}
 
 	return nil
+}
+
+// isLocalPath checks if a repository origin is a local file path rather than a remote URL
+func isLocalPath(origin string) bool {
+	// Check if it's an absolute path
+	if filepath.IsAbs(origin) {
+		return true
+	}
+
+	// Check if it's a relative path (starts with ./ or ../)
+	if strings.HasPrefix(origin, "./") || strings.HasPrefix(origin, "../") {
+		return true
+	}
+
+	// Check if it doesn't contain a protocol scheme (simple heuristic)
+	if !strings.Contains(origin, "://") && !strings.Contains(origin, "@") {
+		return true
+	}
+
+	return false
 }
 
 // GetCachePath returns the path to the cached repository
