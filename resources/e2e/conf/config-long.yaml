@@ -1,4 +1,5 @@
 repo_path: "/tmp/home-ci/e2e/long/repo"
+repo_name: "long-repo"
 check_interval: 30s
 test_script: "e2e/run-e2e.sh"
 options: "-c -i ztf"
@@ -7,6 +8,12 @@ test_timeout: 10s
 fetch_remote: false
 max_concurrent_runs: 1
 keep_time: 24h  # Preserve test data for debugging
+
+# New architecture parameters
+state_dir: "/tmp/home-ci/e2e/long/state"
+cache_dir: "/tmp/home-ci/e2e/long/cache"
+workspace_dir: "/tmp/home-ci/e2e/long/workspaces"
+log_dir: "/tmp/home-ci/e2e/long/logs"
 
 cleanup:
   after_e2e: false

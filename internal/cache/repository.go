@@ -168,32 +168,65 @@ func (rc *RepositoryCache) checkoutBranchCommit(repo *git.Repository, branch, co
 	// Parse commit hash
 	commitHash := plumbing.NewHash(commit)
 
-	// Checkout the specific commit
-	err = worktree.Checkout(&git.CheckoutOptions{
-		Hash: commitHash,
-	})
-	if err != nil {
-		// If direct commit checkout fails, try to checkout branch first then commit
-		cleanBranchName := strings.TrimPrefix(branch, "origin/")
+	// Checkout branch first to avoid detached HEAD state
+	cleanBranchName := strings.TrimPrefix(branch, "origin/")
+	localBranchRef := plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", cleanBranchName))
+	remoteBranchRef := plumbing.ReferenceName(fmt.Sprintf("refs/remotes/origin/%s", cleanBranchName))
 
-		branchRef := plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", cleanBranchName))
+	slog.Debug("Preparing to checkout branch", "branch", cleanBranchName, "commit", commit)
 
-		// Checkout branch first
+	// Check if local branch already exists
+	_, err = repo.Reference(localBranchRef, true)
+	localBranchExists := err == nil
+
+	if localBranchExists {
+		// Local branch exists, just checkout to it
+		slog.Debug("Local branch exists, checking out", "branch", cleanBranchName)
 		err = worktree.Checkout(&git.CheckoutOptions{
-			Branch: branchRef,
-			Create: true,
+			Branch: localBranchRef,
 		})
-		if err != nil {
-			return fmt.Errorf("failed to checkout branch %s: %w", cleanBranchName, err)
+	} else {
+		// Local branch doesn't exist, check if remote branch exists
+		slog.Debug("Local branch doesn't exist, checking remote", "branch", cleanBranchName)
+		_, err = repo.Reference(remoteBranchRef, true)
+		if err == nil {
+			// Remote branch exists, create local branch tracking it
+			slog.Debug("Creating local branch from remote", "branch", cleanBranchName)
+			err = worktree.Checkout(&git.CheckoutOptions{
+				Branch: localBranchRef,
+				Create: true,
+			})
+		} else {
+			// Neither local nor remote branch exists, fallback to commit checkout
+			slog.Debug("No branch found, checking out commit directly", "commit", commit)
+			err = worktree.Checkout(&git.CheckoutOptions{
+				Hash: commitHash,
+			})
 		}
+	}
 
-		// Then checkout the specific commit
+	if err != nil {
+		slog.Debug("Branch checkout failed, falling back to commit checkout", "branch", cleanBranchName, "error", err)
+		// If branch checkout fails, fallback to direct commit checkout
 		err = worktree.Checkout(&git.CheckoutOptions{
 			Hash: commitHash,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to checkout commit %s: %w", commit, err)
 		}
+	} else {
+		slog.Debug("Checkout succeeded", "branch", cleanBranchName)
+	}
+
+	// Final verification of repository state
+	head, err := repo.Head()
+	if err == nil {
+		slog.Debug("Final repository state",
+			"repoName", rc.RepoName,
+			"targetBranch", cleanBranchName,
+			"targetCommit", commit,
+			"actualHead", head.Hash().String()[:8],
+			"isOnBranch", head.Name().IsBranch())
 	}
 
 	return nil

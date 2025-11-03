@@ -214,7 +214,8 @@ func (th *E2ETestHarness) startHomeCI(configPath string) error {
 	}
 
 	if th.testType != TestTimeout {
-		logPath := filepath.Join(th.testRepoPath, ".home-ci")
+		// With new architecture, logs go to the configured log_dir
+		logPath := filepath.Join(th.tempRunDir, "logs")
 		slog.Info("✅ home-ci started", "pid", th.homeCIProcess.Process.Pid, "logPath", logPath)
 	}
 
@@ -390,16 +391,24 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 
 // countTestsFromResults counts the number of tests by counting JSON result files
 func (th *E2ETestHarness) countTestsFromResults() int {
-	// Check isolated test logs (new architecture with test-specific directories)
+	// Check test results in logs/repo-name/results directories (new architecture)
 	testLogDir := filepath.Join(th.tempRunDir, "logs")
-	if files, err := os.ReadDir(testLogDir); err == nil {
+	if logDirs, err := os.ReadDir(testLogDir); err == nil {
 		count := 0
-		for _, file := range files {
-			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-				filePath := filepath.Join(testLogDir, file.Name())
-				fileInfo, err := os.Stat(filePath)
-				if err == nil && fileInfo.ModTime().After(th.startTime) {
-					count++
+		for _, logDir := range logDirs {
+			if logDir.IsDir() {
+				// Look for results subdirectory in each repo log directory
+				resultsDir := filepath.Join(testLogDir, logDir.Name(), "results")
+				if files, err := os.ReadDir(resultsDir); err == nil {
+					for _, file := range files {
+						if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+							filePath := filepath.Join(resultsDir, file.Name())
+							fileInfo, err := os.Stat(filePath)
+							if err == nil && fileInfo.ModTime().After(th.startTime) {
+								count++
+							}
+						}
+					}
 				}
 			}
 		}

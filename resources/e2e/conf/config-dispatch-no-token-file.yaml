@@ -1,4 +1,5 @@
 repo_path: "/tmp/home-ci/e2e/dispatch-no-token-file/repo"
+repo_name: "dispatch-no-token-file-repo"
 check_interval: 30s
 test_script: "e2e/run-e2e.sh"
 options: "-c -i ztf"
@@ -7,6 +8,12 @@ test_timeout: 10m
 fetch_remote: false
 max_concurrent_runs: 1
 keep_time: 24h  # Preserve test data for debugging
+
+# New architecture parameters
+state_dir: "/tmp/home-ci/e2e/dispatch-no-token-file/state"
+cache_dir: "/tmp/home-ci/e2e/dispatch-no-token-file/cache"
+workspace_dir: "/tmp/home-ci/e2e/dispatch-no-token-file/workspaces"
+log_dir: "/tmp/home-ci/e2e/dispatch-no-token-file/logs"
 
 cleanup:
   after_e2e: false

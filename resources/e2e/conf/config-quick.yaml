@@ -1,4 +1,5 @@
 repo_path: "/tmp/home-ci/e2e/quick/repo"
+repo_name: "quick-repo"
 check_interval: 2s
 test_script: "e2e/run-e2e.sh"
 options: "-c -i ztf"
@@ -7,6 +8,12 @@ test_timeout: 5s  # Very fast timeout for quick testing
 fetch_remote: false
 max_concurrent_runs: 1
 keep_time: 24h  # Preserve test data for debugging
+
+# New architecture parameters
+state_dir: "/tmp/home-ci/e2e/quick/state"
+cache_dir: "/tmp/home-ci/e2e/quick/cache"
+workspace_dir: "/tmp/home-ci/e2e/quick/workspaces"
+log_dir: "/tmp/home-ci/e2e/quick/logs"
 
 cleanup:
   after_e2e: false
