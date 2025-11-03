@@ -74,6 +74,22 @@ func (rc *RepositoryCache) createCache() error {
 	}
 
 	slog.Info("Repository cache created", "repo", rc.RepoName, "origin", rc.RepoOrigin, "cache", rc.cachePath)
+
+	// For remote repositories, ensure local branches exist for all remote branches
+	if !isLocalPath(rc.RepoOrigin) {
+		// Open the newly created repository to create local branches
+		fs := osfs.New(rc.cachePath)
+		storer := filesystem.NewStorage(fs, nil)
+		repo, err := git.Open(storer, fs)
+		if err != nil {
+			return fmt.Errorf("failed to open newly created cache repository %s: %w", rc.cachePath, err)
+		}
+
+		if err := rc.createLocalBranches(repo); err != nil {
+			return fmt.Errorf("failed to create local branches: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -107,7 +123,7 @@ func (rc *RepositoryCache) updateCache() error {
 		err = repo.Fetch(&git.FetchOptions{
 			RemoteName: "origin",
 			RefSpecs: []config.RefSpec{
-				config.RefSpec("+refs/heads/*:refs/heads/*"),
+				config.RefSpec("+refs/heads/*:refs/remotes/origin/*"),
 				config.RefSpec("+refs/tags/*:refs/tags/*"),
 			},
 			Progress: os.Stdout,
@@ -125,22 +141,79 @@ func (rc *RepositoryCache) updateCache() error {
 		slog.Info("Repository cache updated", "repo", rc.RepoName)
 	}
 
+	// Ensure local branches exist for all remote branches
+	if err := rc.createLocalBranches(repo); err != nil {
+		return fmt.Errorf("failed to create local branches: %w", err)
+	}
+
 	return nil
 }
 
-// CloneToWorkspace clones from cache to a workspace directory for a specific branch and commit
+// createLocalBranches creates local branches for all remote branches in the cache
+func (rc *RepositoryCache) createLocalBranches(repo *git.Repository) error {
+	// Get all remote references
+	refs, err := repo.References()
+	if err != nil {
+		return fmt.Errorf("failed to get repository references: %w", err)
+	}
+
+	defer refs.Close()
+
+	err = refs.ForEach(func(ref *plumbing.Reference) error {
+		refName := ref.Name()
+
+		// Process only remote branch references (refs/remotes/origin/*)
+		if refName.IsRemote() && strings.HasPrefix(refName.String(), "refs/remotes/origin/") {
+			branchName := strings.TrimPrefix(refName.String(), "refs/remotes/origin/")
+
+			// Skip HEAD reference
+			if branchName == "HEAD" {
+				return nil
+			}
+
+			localBranchRef := plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", branchName))
+
+			// Check if local branch already exists
+			_, err := repo.Reference(localBranchRef, true)
+			if err == nil {
+				// Local branch already exists, skip
+				return nil
+			}
+
+			// Create local branch reference pointing to the same commit as remote branch
+			newRef := plumbing.NewHashReference(localBranchRef, ref.Hash())
+			err = repo.Storer.SetReference(newRef)
+			if err != nil {
+				slog.Debug("Failed to create local branch", "branch", branchName, "error", err)
+				return nil // Continue with other branches
+			}
+
+			slog.Debug("Created local branch", "branch", branchName, "commit", ref.Hash().String()[:8])
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to iterate references: %w", err)
+	}
+
+	return nil
+}
+
+// CloneToWorkspace clones directly from origin to a workspace directory for a specific branch and commit
 func (rc *RepositoryCache) CloneToWorkspace(workspaceDir, branch, commit string) error {
 	// Ensure workspace directory exists
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		return fmt.Errorf("failed to create workspace directory %s: %w", workspaceDir, err)
 	}
 
-	// Clone from cache to workspace
+	// Clone directly from origin to workspace
 	repo, err := git.PlainClone(workspaceDir, false, &git.CloneOptions{
-		URL: rc.cachePath,
+		URL: rc.RepoOrigin,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to clone from cache %s to workspace %s: %w", rc.cachePath, workspaceDir, err)
+		return fmt.Errorf("failed to clone from origin %s to workspace %s: %w", rc.RepoOrigin, workspaceDir, err)
 	}
 
 	// Checkout specific branch and commit
@@ -192,10 +265,34 @@ func (rc *RepositoryCache) checkoutBranchCommit(repo *git.Repository, branch, co
 		if err == nil {
 			// Remote branch exists, create local branch tracking it
 			slog.Debug("Creating local branch from remote", "branch", cleanBranchName)
+
+			// Get the remote branch reference to set up tracking
+			remoteRef, err := repo.Reference(remoteBranchRef, true)
+			if err != nil {
+				return fmt.Errorf("failed to get remote branch reference: %w", err)
+			}
+
+			slog.Debug("Remote branch details",
+				"remoteBranch", remoteBranchRef.String(),
+				"remoteHash", remoteRef.Hash().String(),
+				"targetCommit", commit)
+
 			err = worktree.Checkout(&git.CheckoutOptions{
 				Branch: localBranchRef,
 				Create: true,
+				Hash:   remoteRef.Hash(),
 			})
+			if err != nil {
+				slog.Debug("Failed to create and checkout local branch with hash, trying without hash", "error", err)
+				// Try without specifying hash, let git figure it out
+				err = worktree.Checkout(&git.CheckoutOptions{
+					Branch: localBranchRef,
+					Create: true,
+				})
+				if err != nil {
+					slog.Debug("Failed to create and checkout local branch without hash", "error", err)
+				}
+			}
 		} else {
 			// Neither local nor remote branch exists, fallback to commit checkout
 			slog.Debug("No branch found, checking out commit directly", "commit", commit)
@@ -214,12 +311,33 @@ func (rc *RepositoryCache) checkoutBranchCommit(repo *git.Repository, branch, co
 		if err != nil {
 			return fmt.Errorf("failed to checkout commit %s: %w", commit, err)
 		}
+		slog.Debug("Fallback commit checkout succeeded", "commit", commit)
 	} else {
 		slog.Debug("Checkout succeeded", "branch", cleanBranchName)
 	}
 
-	// Final verification of repository state
+	// Verify that we ended up on the correct commit
 	head, err := repo.Head()
+	if err == nil {
+		actualCommit := head.Hash().String()
+		if actualCommit != commit {
+			slog.Debug("Commit mismatch, attempting to checkout specific commit",
+				"expectedCommit", commit,
+				"actualCommit", actualCommit,
+				"branch", cleanBranchName)
+
+			// If we're not on the right commit, try to checkout the specific commit
+			err = worktree.Checkout(&git.CheckoutOptions{
+				Hash: commitHash,
+			})
+			if err != nil {
+				slog.Warn("Failed to checkout specific commit", "commit", commit, "error", err)
+			}
+		}
+	}
+
+	// Final verification of repository state
+	head, err = repo.Head()
 	if err == nil {
 		slog.Debug("Final repository state",
 			"repoName", rc.RepoName,

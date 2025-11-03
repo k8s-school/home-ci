@@ -45,8 +45,8 @@ branch_scenarios:
     description: "Most feature branches should succeed"
 
   "bugfix/*":
-    default_result: "failure"
-    description: "Most bugfix branches should fail (to test error scenarios)"
+    default_result: "timeout"
+    description: "Most bugfix branches should timeout (to test timeout scenarios)"
 
 # Test execution parameters (currently unused - durations are hardcoded in run-e2e.sh)
 # These could be used in future versions for dynamic timing control
