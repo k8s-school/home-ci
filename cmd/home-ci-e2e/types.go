@@ -57,6 +57,7 @@ type E2ETestHarness struct {
 	duration      time.Duration
 	testRepoPath  string
 	tempRunDir    string // Unique temp directory for this run (contains repo and data)
+	repoName      string // Repository name from config (cached)
 	homeCIProcess *exec.Cmd
 	homeCIContext context.Context
 	homeCICancel  context.CancelFunc

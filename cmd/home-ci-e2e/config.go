@@ -40,8 +40,37 @@ func (th *E2ETestHarness) createConfigFile() (string, error) {
 	}
 
 	configPath := filepath.Join(th.testType.getTestDirectory(), configFileName)
+
+	// Initialize the repo name from the config file that was just created
+	if err := th.initializeRepoName(configPath); err != nil {
+		return "", fmt.Errorf("failed to initialize repo name: %w", err)
+	}
+
 	return configPath, nil
 }
+
+// initializeRepoName reads and caches the repo name from the config file
+func (th *E2ETestHarness) initializeRepoName(configPath string) error {
+	// Read the config file
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file %s: %w", configPath, err)
+	}
+
+	// Parse YAML to extract repo_name
+	var config map[string]interface{}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse YAML config file %s: %w", configPath, err)
+	}
+
+	if repoName, ok := config["repo_name"].(string); ok && repoName != "" {
+		th.repoName = repoName
+		return nil
+	}
+
+	return fmt.Errorf("repo_name not found or empty in config file %s", configPath)
+}
+
 
 // getConfigForTestType returns config file name, content and type for the current test type
 func (th *E2ETestHarness) getConfigForTestType() (string, string, string) {

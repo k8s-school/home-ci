@@ -391,24 +391,16 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 
 // countTestsFromResults counts the number of tests by counting JSON result files
 func (th *E2ETestHarness) countTestsFromResults() int {
-	// Check test results in logs/repo-name/results directories (new architecture)
-	testLogDir := filepath.Join(th.tempRunDir, "logs")
-	if logDirs, err := os.ReadDir(testLogDir); err == nil {
+	// Check test results in logs/repo-name/results directory (new architecture)
+	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "results")
+	if files, err := os.ReadDir(resultsDir); err == nil {
 		count := 0
-		for _, logDir := range logDirs {
-			if logDir.IsDir() {
-				// Look for results subdirectory in each repo log directory
-				resultsDir := filepath.Join(testLogDir, logDir.Name(), "results")
-				if files, err := os.ReadDir(resultsDir); err == nil {
-					for _, file := range files {
-						if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-							filePath := filepath.Join(resultsDir, file.Name())
-							fileInfo, err := os.Stat(filePath)
-							if err == nil && fileInfo.ModTime().After(th.startTime) {
-								count++
-							}
-						}
-					}
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+				filePath := filepath.Join(resultsDir, file.Name())
+				fileInfo, err := os.Stat(filePath)
+				if err == nil && fileInfo.ModTime().After(th.startTime) {
+					count++
 				}
 			}
 		}
@@ -548,13 +540,27 @@ func (th *E2ETestHarness) analyzeTestResults() bool {
 	log.Println("")
 	log.Println("=== Test Results Analysis ===")
 
-	// Read the home-ci test results
-	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-	files, err := os.ReadDir(homeCIDir)
+	// Read the home-ci test results from new architecture location
+	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "results")
+	files, err := os.ReadDir(resultsDir)
 	if err != nil {
-		log.Printf("⚠️ Could not read test results directory: %v", err)
-		return false
+		// Fallback to old location
+		homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+		files, err = os.ReadDir(homeCIDir)
+		if err != nil {
+			log.Printf("⚠️ Could not read test results directory: %v", err)
+			return false
+		}
+		// Use old location for processing
+		return th.processTestResultsInDirectory(files, homeCIDir)
 	}
+
+	// Use new location for processing
+	return th.processTestResultsInDirectory(files, resultsDir)
+}
+
+// processTestResultsInDirectory processes test results from a given directory
+func (th *E2ETestHarness) processTestResultsInDirectory(files []os.DirEntry, dirPath string) bool {
 
 	totalTests := 0
 	successfulTests := 0
@@ -564,7 +570,7 @@ func (th *E2ETestHarness) analyzeTestResults() bool {
 
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
-			jsonPath := filepath.Join(homeCIDir, file.Name())
+			jsonPath := filepath.Join(dirPath, file.Name())
 			content, readErr := os.ReadFile(jsonPath)
 			if readErr != nil {
 				continue

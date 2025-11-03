@@ -12,68 +12,38 @@ import (
 func (th *E2ETestHarness) validateTestResults() ValidationResult {
 	result := ValidationResult{}
 
+	// Load test expectations once
 	config, err := th.loadTestExpectations()
 	if err != nil {
 		log.Printf("⚠️ Failed to load test expectations: %v", err)
 		return result
 	}
 
-	// Get all test result files
-	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-	files, err := os.ReadDir(homeCIDir)
+	// Get all test result files from new architecture location
+	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "results")
+	files, err := os.ReadDir(resultsDir)
 	if err != nil {
-		log.Printf("⚠️ Failed to read test results directory: %v", err)
-		return result
-	}
+		// Fallback to old location
+		homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+		files, err = os.ReadDir(homeCIDir)
+		if err != nil {
+			log.Printf("⚠️ Failed to read test results directory: %v", err)
+			return result
+		}
 
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
-			jsonPath := filepath.Join(homeCIDir, file.Name())
-
-			content, err := os.ReadFile(jsonPath)
-			if err != nil {
-				continue
+		// Process files from old location
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
+				jsonPath := filepath.Join(homeCIDir, file.Name())
+				th.processTestResultFile(jsonPath, config, &result)
 			}
-
-			var testResult TestResult
-			if err := json.Unmarshal(content, &testResult); err != nil {
-				continue
-			}
-
-			result.TotalTests++
-
-			// Determine expected outcome
-			expectedResult := th.getExpectedResult(config, testResult.Branch, testResult.Commit, "")
-
-			// Count expected outcomes
-			switch expectedResult {
-			case "success":
-				result.ExpectedSuccesses++
-			case "failure":
-				result.ExpectedFailures++
-			case "timeout":
-				result.ExpectedTimeouts++
-			}
-
-			// Count actual outcomes
-			if testResult.Success {
-				result.ActualSuccesses++
-			} else if testResult.TimedOut {
-				result.ActualTimeouts++
-			} else {
-				result.ActualFailures++
-			}
-
-			// Check if prediction was correct
-			actualResult := "failure" // default
-			if testResult.Success {
-				actualResult = "success"
-			} else if testResult.TimedOut {
-				actualResult = "timeout"
-			}
-
-			if expectedResult == actualResult {
-				result.CorrectPredictions++
+		}
+	} else {
+		// Process files from new location
+		for _, file := range files {
+			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+				jsonPath := filepath.Join(resultsDir, file.Name())
+				th.processTestResultFile(jsonPath, config, &result)
 			}
 		}
 	}
@@ -86,24 +56,87 @@ func (th *E2ETestHarness) validateTestResults() ValidationResult {
 	return result
 }
 
+// processTestResultFile processes a single test result file and updates the validation result
+func (th *E2ETestHarness) processTestResultFile(jsonPath string, config *TestExpectationConfig, result *ValidationResult) {
+
+	content, err := os.ReadFile(jsonPath)
+	if err != nil {
+		return
+	}
+
+	var testResult TestResult
+	if err := json.Unmarshal(content, &testResult); err != nil {
+		return
+	}
+
+	result.TotalTests++
+
+	// Determine expected outcome
+	expectedResult := th.getExpectedResult(config, testResult.Branch, testResult.Commit, "")
+
+	// Count expected outcomes
+	switch expectedResult {
+	case "success":
+		result.ExpectedSuccesses++
+	case "failure":
+		result.ExpectedFailures++
+	case "timeout":
+		result.ExpectedTimeouts++
+	}
+
+	// Count actual outcomes
+	if testResult.Success {
+		result.ActualSuccesses++
+	} else if testResult.TimedOut {
+		result.ActualTimeouts++
+	} else {
+		result.ActualFailures++
+	}
+
+	// Check if prediction was correct
+	actualResult := "failure" // default
+	if testResult.Success {
+		actualResult = "success"
+	} else if testResult.TimedOut {
+		actualResult = "timeout"
+	}
+
+	if expectedResult == actualResult {
+		result.CorrectPredictions++
+	}
+}
+
 // verifyCleanupExecuted checks if cleanup was executed for timeout tests
 func (th *E2ETestHarness) verifyCleanupExecuted() bool {
 	if th.testType != TestTimeout {
 		return true // Not relevant for non-timeout tests
 	}
 
-	// Check if any test result JSON files indicate cleanup was executed
-	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-	files, err := os.ReadDir(homeCIDir)
+	// Check if any test result JSON files indicate cleanup was executed in new architecture location
+	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "results")
+	files, err := os.ReadDir(resultsDir)
 	if err != nil {
-		log.Printf("⚠️ Could not read test results directory: %v", err)
-		return false
+		// Fallback to old location
+		homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+		files, err = os.ReadDir(homeCIDir)
+		if err != nil {
+			log.Printf("⚠️ Could not read test results directory: %v", err)
+			return false
+		}
+
+		// Check old location
+		return th.checkCleanupInFiles(files, homeCIDir)
 	}
 
-	cleanupExecuted := false
+	// Check new location
+	return th.checkCleanupInFiles(files, resultsDir)
+}
+
+// checkCleanupInFiles checks for cleanup execution in a list of files
+func (th *E2ETestHarness) checkCleanupInFiles(files []os.DirEntry, dirPath string) bool {
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
-			jsonPath := filepath.Join(homeCIDir, file.Name())
+			jsonPath := filepath.Join(dirPath, file.Name())
 
 			content, err := os.ReadFile(jsonPath)
 			if err != nil {
@@ -118,18 +151,13 @@ func (th *E2ETestHarness) verifyCleanupExecuted() bool {
 			if result.TimedOut && result.CleanupExecuted {
 				log.Printf("✅ Cleanup executed for timeout test: branch=%s, commit=%s, success=%v",
 					result.Branch, result.Commit[:8], result.CleanupSuccess)
-				cleanupExecuted = true
-				break
+				return true
 			}
 		}
 	}
 
-	if !cleanupExecuted {
-		log.Printf("❌ No cleanup execution found for timeout test")
-		return false
-	}
-
-	return true
+	log.Printf("❌ No cleanup execution found for timeout test")
+	return false
 }
 
 // printStatistics displays test statistics

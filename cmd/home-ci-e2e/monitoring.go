@@ -9,13 +9,19 @@ import (
 	"time"
 )
 
-// monitorState monitors home-ci state.json for running tests and timeouts
+// monitorState monitors home-ci state files for running tests and timeouts
 func (th *E2ETestHarness) monitorState() {
 	go func() {
-		// Wait for the .home-ci directory to be created by home-ci
-		homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
+		// Wait for the state directory to be created by home-ci (new architecture)
+		stateDir := filepath.Join(th.tempRunDir, "state")
 		for {
+			if _, err := os.Stat(stateDir); err == nil {
+				break
+			}
+			// Also check old location as fallback
+			homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
 			if _, err := os.Stat(homeCIDir); err == nil {
+				stateDir = homeCIDir
 				break
 			}
 			time.Sleep(1 * time.Second)
@@ -26,8 +32,8 @@ func (th *E2ETestHarness) monitorState() {
 			case <-th.homeCIContext.Done():
 				return
 			case <-time.After(2 * time.Second):
-				// Check state.json for running tests
-				if err := th.checkStateForActivity(homeCIDir); err != nil {
+				// Check state files for running tests
+				if err := th.checkStateForActivity(stateDir); err != nil {
 					log.Printf("Error checking state: %v", err)
 				}
 			}
@@ -35,11 +41,20 @@ func (th *E2ETestHarness) monitorState() {
 	}()
 }
 
-// checkStateForActivity checks state.json for test execution and timeouts
-func (th *E2ETestHarness) checkStateForActivity(homeCIDir string) error {
-	stateFile := filepath.Join(homeCIDir, "state.json")
+// checkStateForActivity checks state files for test execution and timeouts
+func (th *E2ETestHarness) checkStateForActivity(stateDir string) error {
+	var stateFile string
 
-	// Check if state.json exists
+	// Check if it's the new architecture (state directory with repo-specific files)
+	if strings.Contains(stateDir, "/state") && !strings.Contains(stateDir, ".home-ci") {
+		// New architecture: state_dir/repo_name.json
+		stateFile = filepath.Join(stateDir, th.repoName+".json")
+	} else {
+		// Old architecture: .home-ci/state.json
+		stateFile = filepath.Join(stateDir, "state.json")
+	}
+
+	// Check if state file exists
 	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
 		return nil // No state file yet
 	}
@@ -83,8 +98,7 @@ func (th *E2ETestHarness) checkStateForTimeout() error {
 	}
 
 	// Check JSON result files for timeout indication in new architecture location
-	repoName := "timeout-repo" // Use the repo name from config
-	resultsDir := filepath.Join("/tmp/home-ci/e2e/timeout/logs", repoName, "results")
+	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "results")
 	files, err := os.ReadDir(resultsDir)
 	if err != nil {
 		// Fallback to old location
@@ -136,6 +150,7 @@ func (th *E2ETestHarness) checkJSONForTimeout(jsonPath string) bool {
 
 	return result.TimedOut
 }
+
 
 // displayRunningTests shows current running tests with their details
 func (th *E2ETestHarness) displayRunningTests() {
