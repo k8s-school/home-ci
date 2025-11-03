@@ -10,6 +10,7 @@ import (
 
 	"github.com/k8s-school/home-ci/internal/config"
 	"github.com/k8s-school/home-ci/internal/runner"
+	"github.com/k8s-school/home-ci/internal/state"
 )
 
 const (
@@ -31,7 +32,7 @@ const (
 type Monitor struct {
 	config       config.Config
 	gitRepo      *GitRepository
-	stateManager *StateManager
+	stateManager runner.StateManager
 	testRunner   *runner.TestRunner
 	cleanupMgr   *CleanupManager
 	ctx          context.Context
@@ -69,8 +70,12 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 	}
 
 	logDir := homeCIDir
-	stateFile := filepath.Join(homeCIDir, stateFileName)
-	stateManager := NewStateManager(stateFile)
+	stateManager := state.NewStateManager(cfg.StateDir, cfg.RepoName)
+
+	// Load existing state
+	if err := stateManager.LoadState(); err != nil {
+		return nil, fmt.Errorf("failed to load state: %w", err)
+	}
 
 	testRunner := runner.NewTestRunner(cfg, configPath, logDir, ctx, stateManager)
 	cleanupMgr := NewCleanupManager(cfg.KeepTime, cfg.WorkspaceDir, ctx)
@@ -187,20 +192,12 @@ func (m *Monitor) processBranchWithDateFilter(branchName string) error {
 	commitHash := latestCommit.Hash.String()
 
 	// Check if this is a new commit
-	state, exists := m.stateManager.GetBranchState(branchName)
-	if exists && state.LatestCommit == commitHash {
+	state := m.stateManager.GetBranchState(branchName)
+	if state != nil && state.LatestCommit == commitHash {
 		return nil // No new commits
 	}
 
 	slog.Debug("New commit detected", "branch", branchName, "commit", commitHash[:8], "age", time.Since(latestCommit.Author.When).Truncate(time.Hour))
-
-	// Initialize or get branch state
-	if !exists {
-		state = &BranchState{
-			LatestCommit: "",
-		}
-		m.stateManager.SetBranchState(branchName, state)
-	}
 
 	// Queue the test job
 	job := runner.TestJob{Branch: branchName, Commit: commitHash}

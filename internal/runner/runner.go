@@ -23,6 +23,15 @@ type StateManager interface {
 	GetRunningTests() []RunningTest
 	CleanupOldRunningTests(maxAge time.Duration)
 	SaveState() error
+	// Additional methods needed by monitor
+	GetBranchState(branch string) *BranchState
+	UpdateBranchState(branch, commit string)
+	LoadState() error
+}
+
+// BranchState represents the state of a branch
+type BranchState struct {
+	LatestCommit string `json:"latest_commit"`
 }
 
 // RunningTest represents a test that is currently running

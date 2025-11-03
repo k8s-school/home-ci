@@ -76,17 +76,33 @@ func (rc *RepositoryCache) updateCache() error {
 		return fmt.Errorf("failed to open cached repository %s: %w", rc.cachePath, err)
 	}
 
-	// Fetch all references from origin
-	err = repo.Fetch(&git.FetchOptions{
-		RemoteName: "origin",
-		RefSpecs: []config.RefSpec{
-			config.RefSpec("+refs/heads/*:refs/heads/*"),
-			config.RefSpec("+refs/tags/*:refs/tags/*"),
-		},
-		Progress: os.Stdout,
-	})
-	if err != nil && err != git.NoErrAlreadyUpToDate {
-		return fmt.Errorf("failed to fetch updates for cached repository %s: %w", rc.cachePath, err)
+	// Check if origin remote exists before fetching
+	remotes, err := repo.Remotes()
+	if err != nil {
+		return fmt.Errorf("failed to get remotes for cached repository %s: %w", rc.cachePath, err)
+	}
+
+	hasOrigin := false
+	for _, remote := range remotes {
+		if remote.Config().Name == "origin" {
+			hasOrigin = true
+			break
+		}
+	}
+
+	// Only fetch if origin remote exists
+	if hasOrigin {
+		err = repo.Fetch(&git.FetchOptions{
+			RemoteName: "origin",
+			RefSpecs: []config.RefSpec{
+				config.RefSpec("+refs/heads/*:refs/heads/*"),
+				config.RefSpec("+refs/tags/*:refs/tags/*"),
+			},
+			Progress: os.Stdout,
+		})
+		if err != nil && err != git.NoErrAlreadyUpToDate {
+			return fmt.Errorf("failed to fetch updates for cached repository %s: %w", rc.cachePath, err)
+		}
 	}
 
 	if err == git.NoErrAlreadyUpToDate {

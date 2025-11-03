@@ -12,15 +12,11 @@ import (
 	"github.com/k8s-school/home-ci/internal/runner"
 )
 
-type BranchState struct {
-	LatestCommit string `json:"latest_commit"`
-}
-
 // RepositoryState represents the state for a single repository
 type RepositoryState struct {
-	BranchStates map[string]*BranchState `json:"branch_states"`
-	RunningTests []runner.RunningTest    `json:"running_tests"`
-	LastUpdated  time.Time               `json:"last_updated"`
+	BranchStates map[string]*runner.BranchState `json:"branch_states"`
+	RunningTests []runner.RunningTest           `json:"running_tests"`
+	LastUpdated  time.Time                      `json:"last_updated"`
 }
 
 // StateManager manages per-repository state files
@@ -37,7 +33,7 @@ func NewStateManager(stateDir, repoName string) *StateManager {
 		stateDir: stateDir,
 		repoName: repoName,
 		state: &RepositoryState{
-			BranchStates: make(map[string]*BranchState),
+			BranchStates: make(map[string]*runner.BranchState),
 			RunningTests: make([]runner.RunningTest, 0),
 			LastUpdated:  time.Now(),
 		},
@@ -100,8 +96,8 @@ func (sm *StateManager) LoadState() error {
 func (sm *StateManager) migrateFromOldFormat(data []byte) error {
 	// Try old global format
 	type OldState struct {
-		BranchStates map[string]*BranchState `json:"branch_states"`
-		RunningTests []runner.RunningTest    `json:"running_tests"`
+		BranchStates map[string]*runner.BranchState `json:"branch_states"`
+		RunningTests []runner.RunningTest           `json:"running_tests"`
 	}
 
 	var oldState OldState
@@ -121,7 +117,7 @@ func (sm *StateManager) migrateFromOldFormat(data []byte) error {
 	}
 
 	// Try even older format (just branch states)
-	var oldBranchStates map[string]*BranchState
+	var oldBranchStates map[string]*runner.BranchState
 	if err := json.Unmarshal(data, &oldBranchStates); err == nil {
 		sm.state.BranchStates = oldBranchStates
 		sm.state.RunningTests = make([]runner.RunningTest, 0)
@@ -175,7 +171,7 @@ func (sm *StateManager) saveStateUnsafe() error {
 }
 
 // GetBranchState returns the state for a specific branch
-func (sm *StateManager) GetBranchState(branch string) *BranchState {
+func (sm *StateManager) GetBranchState(branch string) *runner.BranchState {
 	sm.stateMutex.RLock()
 	defer sm.stateMutex.RUnlock()
 
@@ -188,7 +184,7 @@ func (sm *StateManager) UpdateBranchState(branch, commit string) {
 	defer sm.stateMutex.Unlock()
 
 	if sm.state.BranchStates[branch] == nil {
-		sm.state.BranchStates[branch] = &BranchState{}
+		sm.state.BranchStates[branch] = &runner.BranchState{}
 	}
 	sm.state.BranchStates[branch].LatestCommit = commit
 }
