@@ -290,16 +290,11 @@ func (te *TestExecution) registerRunningTest() error {
 	return te.runner.stateManager.SaveState()
 }
 
-// setupRepository clones and prepares the repository for testing
+// setupRepository clones and prepares the repository for testing (simplified - no cache)
 func (te *TestExecution) setupRepository() error {
 	// Create workspace directory
 	if err := os.MkdirAll(te.workspaceDir, 0755); err != nil {
 		return fmt.Errorf("failed to create workspace directory: %w", err)
-	}
-
-	// Ensure repository cache is up to date
-	if err := te.runner.repoCache.EnsureCache(); err != nil {
-		return fmt.Errorf("failed to ensure repository cache: %w", err)
 	}
 
 	slog.Debug("Created workspace for test execution",
@@ -310,27 +305,42 @@ func (te *TestExecution) setupRepository() error {
 	// Log repository setup
 	fmt.Fprintf(te.logFile, "=== Setting up Repository Workspace ===\n")
 	fmt.Fprintf(te.logFile, "Repository: %s\n", te.runner.config.RepoName)
-	fmt.Fprintf(te.logFile, "Origin: %s\n", te.runner.repoCache.RepoOrigin)
-	fmt.Fprintf(te.logFile, "Cache: %s\n", te.runner.repoCache.GetCachePath())
+	fmt.Fprintf(te.logFile, "Origin: %s\n", te.runner.config.RepoOrigin)
 	fmt.Fprintf(te.logFile, "Workspace: %s\n", te.workspaceDir)
 	fmt.Fprintf(te.logFile, "Project Directory: %s\n", te.projectDir)
 	fmt.Fprintf(te.logFile, "Branch: %s\n", te.branch)
 	fmt.Fprintf(te.logFile, "Commit: %s\n", te.commit)
 	fmt.Fprintf(te.logFile, "========================================\n\n")
 
-	return te.cloneFromCacheToWorkspace()
+	return te.directCloneToWorkspace()
 }
 
-// cloneFromCacheToWorkspace clones the repository from cache to workspace
-func (te *TestExecution) cloneFromCacheToWorkspace() error {
-	// Use the cache to clone to workspace
-	err := te.runner.repoCache.CloneToWorkspace(te.projectDir, te.branch, te.commit)
-	if err != nil {
-		fmt.Fprintf(te.logFile, "Failed to clone from cache to workspace: %v\n", err)
-		return fmt.Errorf("failed to clone from cache to workspace: %w", err)
+// directCloneToWorkspace clones the repository directly from origin to workspace
+func (te *TestExecution) directCloneToWorkspace() error {
+	fmt.Fprintf(te.logFile, "Cloning repository directly from origin...\n")
+
+	// Clone repository directly from origin
+	cmd := exec.Command("git", "clone", te.runner.config.RepoOrigin, te.projectDir)
+	cmd.Stdout = te.logFile
+	cmd.Stderr = te.logFile
+
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(te.logFile, "Failed to clone repository: %v\n", err)
+		return fmt.Errorf("failed to clone repository from %s: %w", te.runner.config.RepoOrigin, err)
 	}
 
-	fmt.Fprintf(te.logFile, "Repository cloned successfully from cache\n")
+	// Checkout specific commit
+	fmt.Fprintf(te.logFile, "Checking out commit %s...\n", te.commit)
+	cmd = exec.Command("git", "-C", te.projectDir, "checkout", te.commit)
+	cmd.Stdout = te.logFile
+	cmd.Stderr = te.logFile
+
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(te.logFile, "Failed to checkout commit %s: %v\n", te.commit, err)
+		return fmt.Errorf("failed to checkout commit %s: %w", te.commit, err)
+	}
+
+	fmt.Fprintf(te.logFile, "Repository cloned successfully from origin\n")
 	fmt.Fprintf(te.logFile, "Branch: %s\n", te.branch)
 	fmt.Fprintf(te.logFile, "Commit: %s\n", te.commit)
 	fmt.Fprintf(te.logFile, "========================================\n\n")
