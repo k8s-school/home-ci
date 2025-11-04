@@ -27,6 +27,11 @@ func NewGitRepository(repoPath string) (*GitRepository, error) {
 	}, nil
 }
 
+// GetPath returns the local path of the repository
+func (gr *GitRepository) GetPath() string {
+	return gr.repoPath
+}
+
 func (gr *GitRepository) FetchRemote() error {
 	// Only used when fetch_remote is enabled
 	remote, err := gr.repo.Remote("origin")

@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/k8s-school/home-ci/internal/cache"
 	"github.com/k8s-school/home-ci/internal/config"
 	"github.com/k8s-school/home-ci/internal/runner"
 	"github.com/k8s-school/home-ci/internal/state"
@@ -56,15 +58,45 @@ func NewCleanupManager(keepTime time.Duration, workspaceDir string, ctx context.
 }
 
 func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
-	gitRepo, err := NewGitRepository(cfg.RepoPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open git repository at '%s': %w\n\nPlease check your configuration:\n1. Ensure repo_path in %s points to a valid git repository\n2. If using a placeholder configuration, update repo_path to point to an actual repository\n3. Example: repo_path: \"/path/to/your/repo\" or repo_path: \".\" for current directory", cfg.RepoPath, err, configPath)
+	var gitRepo *GitRepository
+	var err error
+
+	// Check if we need to set up a cache for remote repository monitoring
+	isRemoteRepo := strings.HasPrefix(cfg.RepoOrigin, "http://") || strings.HasPrefix(cfg.RepoOrigin, "https://")
+	useDefaultLocalPath := cfg.RepoPath == "."
+
+	if isRemoteRepo && useDefaultLocalPath {
+		// Set up cache for remote repository monitoring
+		slog.Debug("Setting up cache for remote repository monitoring", "origin", cfg.RepoOrigin)
+
+		repoCache := cache.NewRepositoryCache(cfg.CacheDir, cfg.RepoName, cfg.RepoOrigin)
+		if err := repoCache.EnsureCache(); err != nil {
+			return nil, fmt.Errorf("failed to set up repository cache for monitoring: %w", err)
+		}
+
+		// Use the cache path as the local repository for monitoring
+		cachePath := repoCache.GetCachePath()
+		gitRepo, err = NewGitRepository(cachePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open cached repository at '%s': %w", cachePath, err)
+		}
+
+		slog.Debug("Using repository cache for monitoring", "cache_path", cachePath)
+	} else {
+		// Use traditional local repository approach
+		gitRepo, err = NewGitRepository(cfg.RepoPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open git repository at '%s': %w\n\nPlease check your configuration:\n1. Ensure repo_path in %s points to a valid git repository\n2. If using a placeholder configuration, update repo_path to point to an actual repository\n3. Example: repo_path: \"/path/to/your/repo\" or repo_path: \".\" for current directory", cfg.RepoPath, err, configPath)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Get the actual repository path being used for monitoring
+	actualRepoPath := gitRepo.GetPath()
+
 	// Create .home-ci directory in repo for logs and state
-	homeCIDir := filepath.Join(cfg.RepoPath, homeCIDirName)
+	homeCIDir := filepath.Join(actualRepoPath, homeCIDirName)
 	if err := os.MkdirAll(homeCIDir, dirPerm); err != nil {
 		return nil, fmt.Errorf("failed to create .home-ci directory: %w", err)
 	}
