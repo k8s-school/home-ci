@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/k8s-school/home-ci/resources"
 	"gopkg.in/yaml.v3"
@@ -144,38 +143,6 @@ func (th *E2ETestHarness) loadTestExpectations() (*TestExpectationConfig, error)
 	return &config, nil
 }
 
-// getExpectedResult determines what result is expected for a given branch and commit
-func (th *E2ETestHarness) getExpectedResult(config *TestExpectationConfig, branch, commit, commitMessage string) string {
-	// Check global commit patterns first (highest priority)
-	for _, pattern := range config.GlobalScenarios.CommitPatterns {
-		if matched, _ := filepath.Match(pattern.Pattern, commitMessage); matched {
-			return pattern.ExpectedResult
-		}
-	}
-
-	// Check branch-specific scenarios
-	if branchConfig, exists := config.BranchScenarios[branch]; exists {
-		// Check special cases for this branch
-		for _, specialCase := range branchConfig.SpecialCases {
-			if strings.HasPrefix(commit, specialCase.CommitHashPrefix) {
-				return specialCase.ExpectedResult
-			}
-		}
-		return branchConfig.DefaultResult
-	}
-
-	// Check wildcard patterns
-	for branchPattern, branchConfig := range config.BranchScenarios {
-		if strings.Contains(branchPattern, "*") {
-			if matched, _ := filepath.Match(branchPattern, branch); matched {
-				return branchConfig.DefaultResult
-			}
-		}
-	}
-
-	// Default to success if no pattern matches
-	return "success"
-}
 
 // getCacheLocalConfig returns config for cache-local test (fetchRemote: false)
 func (th *E2ETestHarness) getCacheLocalConfig() string {

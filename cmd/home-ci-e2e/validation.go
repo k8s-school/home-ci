@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -71,8 +72,11 @@ func (th *E2ETestHarness) processTestResultFile(jsonPath string, config *TestExp
 
 	result.TotalTests++
 
-	// Determine expected outcome
-	expectedResult := th.getExpectedResult(config, testResult.Branch, testResult.Commit, "")
+	// Get commit message for this test result
+	commitMessage := th.getCommitMessage(testResult.Commit)
+
+	// Determine expected outcome using simplified logic (commit message only)
+	expectedResult := th.getExpectedResult(commitMessage)
 
 	// Count expected outcomes
 	switch expectedResult {
@@ -209,4 +213,22 @@ func (th *E2ETestHarness) printStatistics() {
 			}
 		}
 	}
+}
+
+
+// getExpectedResult determines expected result based on commit message only
+func (th *E2ETestHarness) getExpectedResult(commitMessage string) string {
+	// Check commit message patterns only (same logic as home-ci-diag)
+	if matched, _ := regexp.MatchString(".*FAIL.*", commitMessage); matched {
+		return "failure"
+	}
+	if matched, _ := regexp.MatchString(".*TIMEOUT.*", commitMessage); matched {
+		return "timeout"
+	}
+	if matched, _ := regexp.MatchString(".*SUCCESS.*", commitMessage); matched {
+		return "success"
+	}
+
+	// No pattern found in commit message - default to success
+	return "success"
 }

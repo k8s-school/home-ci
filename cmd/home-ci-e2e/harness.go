@@ -269,16 +269,18 @@ func (th *E2ETestHarness) simulateActivity() {
 	}
 }
 
-// simulateConcurrentActivity creates 4 commits on 4 different branches simultaneously
-// to test max_concurrent_runs=2 limitation
+// simulateConcurrentActivity creates 6 commits on 6 different branches simultaneously
+// to test max_concurrent_runs=2 limitation and different test outcomes (success/timeout/failure)
 func (th *E2ETestHarness) simulateConcurrentActivity() {
-	slog.Info( "🎯 Starting concurrent limit test - creating 4 commits on 4 branches")
+	slog.Info( "🎯 Starting concurrent limit test - creating 6 commits on 6 branches")
 
 	branches := []string{
 		"concurrent/test1",
 		"concurrent/test2",
 		"concurrent/test3",
 		"concurrent/test4",
+		"concurrent/timeout-test",
+		"concurrent/fail-test",
 	}
 
 	commitMessages := []string{
@@ -286,6 +288,8 @@ func (th *E2ETestHarness) simulateConcurrentActivity() {
 		"SUCCESS_CONCURRENT_TEST: Test 2 - Should run in first batch",
 		"SUCCESS_CONCURRENT_TEST: Test 3 - Should run in second batch",
 		"SUCCESS_CONCURRENT_TEST: Test 4 - Should run in second batch",
+		"TIMEOUT_TEST: This test should timeout after 30 seconds",
+		"FAIL_TEST: This test should fail deliberately",
 	}
 
 	// Create all commits quickly to trigger concurrent execution
@@ -300,7 +304,7 @@ func (th *E2ETestHarness) simulateConcurrentActivity() {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	slog.Info( "🏁 All concurrent test commits created")
+	slog.Info( "🏁 All concurrent test commits created (including timeout and failure tests)")
 }
 
 // simulateContinuousActivity simulates continuous integration with variable commit timing
@@ -583,8 +587,9 @@ func (th *E2ETestHarness) processTestResultsInDirectory(files []os.DirEntry, dir
 
 			totalTests++
 
-			// Determine expected behavior for this branch/commit
-			expectedBehavior := th.determineExpectedBehavior(result.Branch, result.Commit)
+			// Determine expected behavior for this commit
+			commitMessage := th.getCommitMessage(result.Commit)
+			expectedBehavior := th.getExpectedResult(commitMessage)
 
 			// Determine actual behavior
 			var actualBehavior string
@@ -633,47 +638,6 @@ func (th *E2ETestHarness) processTestResultsInDirectory(files []os.DirEntry, dir
 	return !hasErrors
 }
 
-// determineExpectedBehavior determines what the expected test outcome should be for a given branch/commit
-func (th *E2ETestHarness) determineExpectedBehavior(branch, commit string) string {
-	// This logic should match the logic in run-e2e.sh
-	// For timeout tests, we expect timeout behavior unless overridden
-	if th.testType == TestTimeout {
-		return "timeout"
-	}
-
-	// First check commit message patterns (matching run-e2e.sh logic)
-	// We need to get the commit message for this commit
-	commitMessage := th.getCommitMessage(commit)
-
-	if strings.Contains(commitMessage, "FAIL") {
-		return "failure"
-	} else if strings.Contains(commitMessage, "TIMEOUT") {
-		return "timeout"
-	} else if strings.Contains(commitMessage, "SUCCESS_CONCURRENT_TEST") {
-		return "success"  // Concurrent tests should succeed, concurrency is checked by home-ci-diag
-	} else if strings.Contains(commitMessage, "SUCCESS") {
-		return "success"
-	}
-
-	// Fallback to branch patterns (matching run-e2e.sh fallback logic)
-	switch branch {
-	case "main":
-		return "success"
-	case "feature/test1":
-		return "success"
-	case "feature/test2":
-		return "failure"
-	case "bugfix/critical":
-		return "timeout"
-	default:
-		if strings.HasPrefix(branch, "feature/") {
-			return "success"
-		} else if strings.HasPrefix(branch, "bugfix/") {
-			return "failure"
-		}
-		return "success" // Default
-	}
-}
 
 // getCommitMessage retrieves the commit message for a given commit hash using go-git API
 func (th *E2ETestHarness) getCommitMessage(commit string) string {

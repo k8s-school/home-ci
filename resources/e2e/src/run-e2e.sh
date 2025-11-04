@@ -33,9 +33,9 @@ echo "=== E2E Test Suite ==="
 echo "Branch: $BRANCH_NAME | Commit: $COMMIT_HASH"
 echo "Message: $COMMIT_MESSAGE"
 
-# Determine expected behavior based on commit message and branch
+# Determine expected behavior based on commit message only
 determine_test_behavior() {
-    # Check commit message patterns first (highest priority)
+    # Check commit message patterns only
     if [[ "$COMMIT_MESSAGE" =~ .*FAIL.* ]]; then
         echo "failure"
     elif [[ "$COMMIT_MESSAGE" =~ .*TIMEOUT.* ]]; then
@@ -45,30 +45,8 @@ determine_test_behavior() {
     elif [[ "$COMMIT_MESSAGE" =~ .*SUCCESS.* ]]; then
         echo "success"
     else
-        # Branch-based behavior (fallback)
-        case "$BRANCH_NAME" in
-            main)
-                echo "success"
-                ;;
-            feature/test1)
-                echo "success"
-                ;;
-            feature/test2)
-                echo "failure"
-                ;;
-            bugfix/critical)
-                echo "timeout"
-                ;;
-            feature/*)
-                echo "success"
-                ;;
-            bugfix/*)
-                echo "failure"
-                ;;
-            *)
-                echo "success"  # Default behavior
-                ;;
-        esac
+        # No pattern found in commit message - default to success
+        echo "success"
     fi
 }
 
