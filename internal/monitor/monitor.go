@@ -61,15 +61,14 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 	var gitRepo *GitRepository
 	var err error
 
-	// Check if we need to set up a cache for remote repository monitoring
-	isRemoteRepo := strings.HasPrefix(cfg.RepoOrigin, "http://") || strings.HasPrefix(cfg.RepoOrigin, "https://")
-	useDefaultLocalPath := cfg.RepoPath == "."
+	// Check if repository is remote or local
+	isRemoteRepo := strings.HasPrefix(cfg.Repository, "http://") || strings.HasPrefix(cfg.Repository, "https://")
 
-	if isRemoteRepo && useDefaultLocalPath {
+	if isRemoteRepo {
 		// Set up cache for remote repository monitoring
-		slog.Debug("Setting up cache for remote repository monitoring", "origin", cfg.RepoOrigin)
+		slog.Debug("Setting up cache for remote repository monitoring", "repository", cfg.Repository)
 
-		repoCache := cache.NewRepositoryCache(cfg.CacheDir, cfg.RepoName, cfg.RepoOrigin)
+		repoCache := cache.NewRepositoryCache(cfg.CacheDir, cfg.RepoName, cfg.Repository)
 		if err := repoCache.EnsureCache(); err != nil {
 			return nil, fmt.Errorf("failed to set up repository cache for monitoring: %w", err)
 		}
@@ -83,10 +82,10 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 
 		slog.Debug("Using repository cache for monitoring", "cache_path", cachePath)
 	} else {
-		// Use traditional local repository approach
-		gitRepo, err = NewGitRepository(cfg.RepoPath)
+		// Use local repository directly
+		gitRepo, err = NewGitRepository(cfg.Repository)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open git repository at '%s': %w\n\nPlease check your configuration:\n1. Ensure repo_path in %s points to a valid git repository\n2. If using a placeholder configuration, update repo_path to point to an actual repository\n3. Example: repo_path: \"/path/to/your/repo\" or repo_path: \".\" for current directory", cfg.RepoPath, err, configPath)
+			return nil, fmt.Errorf("failed to open git repository at '%s': %w\n\nPlease check your configuration:\n1. Ensure repository in %s points to a valid git repository\n2. Example: repository: \"/path/to/your/repo\"", cfg.Repository, configPath)
 		}
 	}
 
@@ -131,7 +130,7 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 
 func (m *Monitor) Start() error {
 	slog.Debug("Starting Git CI Monitor")
-	slog.Debug("Configuration", "repository", m.config.RepoPath, "check_interval", m.config.CheckInterval, "max_concurrent_runs", m.config.MaxConcurrentRuns, "max_commit_age", m.config.MaxCommitAge, "options", m.config.Options)
+	slog.Debug("Configuration", "repository", m.config.Repository, "check_interval", m.config.CheckInterval, "max_concurrent_runs", m.config.MaxConcurrentRuns, "max_commit_age", m.config.MaxCommitAge, "options", m.config.Options)
 
 	// Start test runner goroutine
 	go m.testRunner.Start()

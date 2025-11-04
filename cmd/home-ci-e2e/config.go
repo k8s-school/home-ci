@@ -146,7 +146,7 @@ func (th *E2ETestHarness) loadTestExpectations() (*TestExpectationConfig, error)
 
 // getCacheLocalConfig returns config for cache-local test (fetchRemote: false)
 func (th *E2ETestHarness) getCacheLocalConfig() string {
-	return `repo_path: ` + th.testRepoPath + `
+	return `repository: ` + th.testRepoPath + `
 check_interval: 5s
 test_script: ./e2e/run-e2e.sh
 max_concurrent_runs: 2
@@ -168,7 +168,7 @@ github_actions_dispatch:
 
 // getCacheRemoteConfig returns config for cache-remote test (fetchRemote: true)
 func (th *E2ETestHarness) getCacheRemoteConfig() string {
-	return `repo_path: ` + th.testRepoPath + `
+	return `repository: ` + th.testRepoPath + `
 check_interval: 5s
 test_script: ./e2e/run-e2e.sh
 max_concurrent_runs: 2

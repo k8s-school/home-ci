@@ -37,12 +37,23 @@ Provides insights into test execution, concurrency compliance, and branch timeli
 			return fmt.Errorf("config file path is required. Use --config flag")
 		}
 
-		// Read configuration to get repository path
+		// Read configuration to determine repository path
 		config, err := readConfig(configPath)
 		if err != nil {
 			return fmt.Errorf("failed to read config: %w", err)
 		}
-		repoPath := config.RepoPath
+
+		// Determine actual repository path based on configuration
+		var repoPath string
+		isRemoteRepo := strings.HasPrefix(config.Repository, "http://") || strings.HasPrefix(config.Repository, "https://")
+
+		if isRemoteRepo {
+			// For remote repositories, use cache directory
+			repoPath = filepath.Join(config.CacheDir, config.RepoName)
+		} else {
+			// For local repositories, use repository path directly
+			repoPath = config.Repository
+		}
 
 		// Validate repository path
 		if _, err := os.Stat(repoPath); os.IsNotExist(err) {
@@ -241,11 +252,12 @@ func showHomeciState(repoPath string) {
 
 // Config represents the home-ci configuration structure
 type Config struct {
-	RepoPath          string `yaml:"repo_path"`
+	Repository        string `yaml:"repository"`
 	RepoName          string `yaml:"repo_name"`
 	MaxConcurrentRuns int    `yaml:"max_concurrent_runs"`
 	StateDir          string `yaml:"state_dir"`
 	LogDir            string `yaml:"log_dir"`
+	CacheDir          string `yaml:"cache_dir"`
 }
 
 // TestResult represents a test execution result

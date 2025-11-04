@@ -92,10 +92,7 @@ type TestExecution struct {
 // NewTestRunner creates a new test runner instance
 func NewTestRunner(cfg config.Config, configPath, logDir string, ctx context.Context, stateManager StateManager) *TestRunner {
 	// Create repository cache manager
-	repoOrigin := cfg.RepoOrigin
-	if repoOrigin == "" {
-		repoOrigin = cfg.RepoPath // Fallback for backward compatibility
-	}
+	repoOrigin := cfg.Repository
 
 	repoCache := cache.NewRepositoryCache(cfg.CacheDir, cfg.RepoName, repoOrigin)
 
@@ -304,8 +301,7 @@ func (te *TestExecution) setupRepository() error {
 
 	// Log repository setup
 	fmt.Fprintf(te.logFile, "=== Setting up Repository Workspace ===\n")
-	fmt.Fprintf(te.logFile, "Repository: %s\n", te.runner.config.RepoName)
-	fmt.Fprintf(te.logFile, "Origin: %s\n", te.runner.config.RepoOrigin)
+	fmt.Fprintf(te.logFile, "Repository: %s\n", te.runner.config.Repository)
 	fmt.Fprintf(te.logFile, "Workspace: %s\n", te.workspaceDir)
 	fmt.Fprintf(te.logFile, "Project Directory: %s\n", te.projectDir)
 	fmt.Fprintf(te.logFile, "Branch: %s\n", te.branch)
@@ -320,13 +316,13 @@ func (te *TestExecution) directCloneToWorkspace() error {
 	fmt.Fprintf(te.logFile, "Cloning repository directly from origin...\n")
 
 	// Clone repository directly from origin
-	cmd := exec.Command("git", "clone", te.runner.config.RepoOrigin, te.projectDir)
+	cmd := exec.Command("git", "clone", te.runner.config.Repository, te.projectDir)
 	cmd.Stdout = te.logFile
 	cmd.Stderr = te.logFile
 
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintf(te.logFile, "Failed to clone repository: %v\n", err)
-		return fmt.Errorf("failed to clone repository from %s: %w", te.runner.config.RepoOrigin, err)
+		return fmt.Errorf("failed to clone repository from %s: %w", te.runner.config.Repository, err)
 	}
 
 	// Checkout specific commit

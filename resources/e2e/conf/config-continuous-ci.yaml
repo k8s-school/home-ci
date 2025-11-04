@@ -1,4 +1,4 @@
-repo_path: "/tmp/home-ci/e2e/continuous-ci/repo"
+repository: "/tmp/home-ci/e2e/continuous-ci/repo"
 repo_name: "continuous-ci-repo"
 check_interval: 5s
 test_script: "e2e/run-e2e.sh"

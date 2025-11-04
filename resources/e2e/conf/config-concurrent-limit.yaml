@@ -1,4 +1,4 @@
-repo_path: "/tmp/home-ci/e2e/concurrent-limit/repo"
+repository: "/tmp/home-ci/e2e/concurrent-limit/repo"
 repo_name: "concurrent-limit-repo"
 check_interval: 5s
 test_script: "e2e/run-e2e.sh"

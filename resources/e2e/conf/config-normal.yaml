@@ -1,4 +1,4 @@
-repo_path: "/tmp/home-ci/e2e/normal/repo"
+repository: "/tmp/home-ci/e2e/normal/repo"
 repo_name: "normal-repo"
 check_interval: 30s
 test_script: "e2e/run-e2e.sh"

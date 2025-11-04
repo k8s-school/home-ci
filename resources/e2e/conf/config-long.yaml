@@ -1,4 +1,4 @@
-repo_path: "/tmp/home-ci/e2e/long/repo"
+repository: "/tmp/home-ci/e2e/long/repo"
 repo_name: "long-repo"
 check_interval: 30s
 test_script: "e2e/run-e2e.sh"

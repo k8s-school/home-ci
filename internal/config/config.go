@@ -24,9 +24,8 @@ type Cleanup struct {
 
 type Config struct {
 	// Repository configuration
-	RepoOrigin             string                 `yaml:"repo_origin"` // Git origin URL
+	Repository             string                 `yaml:"repository"`  // Git repository URL or path
 	RepoName               string                 `yaml:"repo_name"`   // Repository name for organization
-	RepoPath               string                 `yaml:"repo_path"`   // Legacy field, will be derived from RepoOrigin if empty
 
 	// Directory structure
 	CacheDir               string                 `yaml:"cache_dir"`
@@ -53,9 +52,8 @@ func Load(path string) (Config, error) {
 	// Default config
 	config = Config{
 		// Repository configuration
-		RepoOrigin:        "",
+		Repository:        "",
 		RepoName:          "",
-		RepoPath:          ".", // Legacy fallback
 
 		// Directory structure with Linux FHS standard defaults
 		CacheDir:          "/var/cache/home-ci",
@@ -105,20 +103,14 @@ func Load(path string) (Config, error) {
 	return config, nil
 }
 
-// Normalize validates and normalizes the configuration, handling backward compatibility
+// Normalize validates and normalizes the configuration
 func (c *Config) Normalize() error {
-	// Handle backward compatibility: if RepoOrigin is empty but RepoPath is set,
-	// treat RepoPath as the origin (for existing configs)
-	if c.RepoOrigin == "" && c.RepoPath != "" && c.RepoPath != "." {
-		c.RepoOrigin = c.RepoPath
-	}
-
-	// Extract repository name from origin if not explicitly set
+	// Extract repository name from repository if not explicitly set
 	if c.RepoName == "" {
-		if c.RepoOrigin != "" {
-			c.RepoName = extractRepoName(c.RepoOrigin)
+		if c.Repository != "" {
+			c.RepoName = extractRepoName(c.Repository)
 		} else {
-			return fmt.Errorf("either repo_name or repo_origin must be specified")
+			return fmt.Errorf("repository must be specified")
 		}
 	}
 

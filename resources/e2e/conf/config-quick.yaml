@@ -1,4 +1,4 @@
-repo_path: "/tmp/home-ci/e2e/quick/repo"
+repository: "/tmp/home-ci/e2e/quick/repo"
 repo_name: "quick-repo"
 check_interval: 2s
 test_script: "e2e/run-e2e.sh"

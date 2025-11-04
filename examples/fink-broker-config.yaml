@@ -1,5 +1,5 @@
 # Repository configuration
-repo_origin: "https://github.com/astrolabsoftware/fink-broker.git"
+repository: "https://github.com/astrolabsoftware/fink-broker.git"
 repo_name: "fink-broker"
 
 # Optional: override default directories (will use /tmp fallbacks for development)

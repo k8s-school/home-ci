@@ -19,16 +19,16 @@ import (
 type RepositoryCache struct {
 	CacheDir   string // Base cache directory
 	RepoName   string // Repository name
-	RepoOrigin string // Repository origin URL
+	Repository string // Repository URL or path
 	cachePath  string // Full path to cached repository
 }
 
 // NewRepositoryCache creates a new repository cache manager
-func NewRepositoryCache(cacheDir, repoName, repoOrigin string) *RepositoryCache {
+func NewRepositoryCache(cacheDir, repoName, repository string) *RepositoryCache {
 	return &RepositoryCache{
 		CacheDir:   cacheDir,
 		RepoName:   repoName,
-		RepoOrigin: repoOrigin,
+		Repository: repository,
 		cachePath:  filepath.Join(cacheDir, repoName),
 	}
 }
@@ -53,30 +53,30 @@ func (rc *RepositoryCache) EnsureCache() error {
 // createCache creates a new bare clone of the repository
 func (rc *RepositoryCache) createCache() error {
 	// Check if the origin is a local path (not a remote URL)
-	if isLocalPath(rc.RepoOrigin) {
+	if isLocalPath(rc.Repository) {
 		// For local repositories, create bare clone directly
 		_, err := git.PlainClone(rc.cachePath, true, &git.CloneOptions{
-			URL:      rc.RepoOrigin,
+			URL:      rc.Repository,
 			Progress: os.Stdout,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to clone local repository %s to cache %s: %w", rc.RepoOrigin, rc.cachePath, err)
+			return fmt.Errorf("failed to clone local repository %s to cache %s: %w", rc.Repository, rc.cachePath, err)
 		}
 	} else {
 		// For remote repositories, create bare clone with proper remotes
 		_, err := git.PlainClone(rc.cachePath, true, &git.CloneOptions{
-			URL:      rc.RepoOrigin,
+			URL:      rc.Repository,
 			Progress: os.Stdout,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to clone repository %s to cache %s: %w", rc.RepoOrigin, rc.cachePath, err)
+			return fmt.Errorf("failed to clone repository %s to cache %s: %w", rc.Repository, rc.cachePath, err)
 		}
 	}
 
-	slog.Info("Repository cache created", "repo", rc.RepoName, "origin", rc.RepoOrigin, "cache", rc.cachePath)
+	slog.Info("Repository cache created", "repo", rc.RepoName, "origin", rc.Repository, "cache", rc.cachePath)
 
 	// For remote repositories, ensure local branches exist for all remote branches
-	if !isLocalPath(rc.RepoOrigin) {
+	if !isLocalPath(rc.Repository) {
 		// Open the newly created repository to create local branches
 		fs := osfs.New(rc.cachePath)
 		storer := filesystem.NewStorage(fs, nil)
@@ -119,7 +119,7 @@ func (rc *RepositoryCache) updateCache() error {
 	}
 
 	// Only fetch if origin remote exists and this is not a local repository
-	if hasOrigin && !isLocalPath(rc.RepoOrigin) {
+	if hasOrigin && !isLocalPath(rc.Repository) {
 		err = repo.Fetch(&git.FetchOptions{
 			RemoteName: "origin",
 			RefSpecs: []config.RefSpec{
@@ -135,7 +135,7 @@ func (rc *RepositoryCache) updateCache() error {
 
 	if err == git.NoErrAlreadyUpToDate {
 		slog.Debug("Repository cache is already up to date", "repo", rc.RepoName)
-	} else if isLocalPath(rc.RepoOrigin) {
+	} else if isLocalPath(rc.Repository) {
 		slog.Debug("Skipping remote fetch for local repository", "repo", rc.RepoName)
 	} else {
 		slog.Info("Repository cache updated", "repo", rc.RepoName)
@@ -210,10 +210,10 @@ func (rc *RepositoryCache) CloneToWorkspace(workspaceDir, branch, commit string)
 
 	// Clone directly from origin to workspace
 	repo, err := git.PlainClone(workspaceDir, false, &git.CloneOptions{
-		URL: rc.RepoOrigin,
+		URL: rc.Repository,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to clone from origin %s to workspace %s: %w", rc.RepoOrigin, workspaceDir, err)
+		return fmt.Errorf("failed to clone from origin %s to workspace %s: %w", rc.Repository, workspaceDir, err)
 	}
 
 	// Checkout specific branch and commit

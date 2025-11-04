@@ -1,4 +1,4 @@
-repo_path: "/tmp/home-ci/e2e/dispatch-no-token-file/repo"
+repository: "/tmp/home-ci/e2e/dispatch-no-token-file/repo"
 repo_name: "dispatch-no-token-file-repo"
 check_interval: 30s
 test_script: "e2e/run-e2e.sh"
