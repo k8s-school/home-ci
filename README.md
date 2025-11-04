@@ -35,7 +35,7 @@ check_interval: 5m
 test_script: "./e2e/your-test-script.sh"
 max_concurrent_runs: 2
 options: "-c -i ztf"
-max_commit_age: 240h
+recent_commits_within: 240h
 test_timeout: 5m
 fetch_remote: true
 
@@ -55,7 +55,7 @@ github_actions_dispatch:
 - `test_script`: Test script to execute
 - `max_concurrent_runs`: Maximum number of concurrent test runs
 - `options`: Options to pass to the test script
-- `max_commit_age`: Maximum age of commits to process (e.g., "240h" for 10 days)
+- `recent_commits_within`: Time window for processing recent commits (e.g., "24h" for last 24 hours, "240h" for 10 days)
 - `test_timeout`: Maximum duration for test execution before timeout (e.g., "30s", "5m")
 - `fetch_remote`: Whether to fetch from remote repositories
 

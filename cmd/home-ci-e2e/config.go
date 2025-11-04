@@ -151,7 +151,7 @@ check_interval: 5s
 test_script: ./e2e/run-e2e.sh
 max_concurrent_runs: 2
 options: ""
-max_commit_age: 240h
+recent_commits_within: 240h
 test_timeout: 30s
 fetch_remote: false
 keep_time: 0
@@ -173,7 +173,7 @@ check_interval: 5s
 test_script: ./e2e/run-e2e.sh
 max_concurrent_runs: 2
 options: ""
-max_commit_age: 240h
+recent_commits_within: 240h
 test_timeout: 30s
 fetch_remote: true
 keep_time: 0

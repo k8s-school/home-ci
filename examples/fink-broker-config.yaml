@@ -16,7 +16,7 @@ log_dir: "/tmp/home-ci/log"
 check_interval: 30s
 test_script: "e2e/run.sh"
 options: "-c"
-max_commit_age: 240h
+recent_commits_within: 240h
 test_timeout: 60m
 fetch_remote: true
 max_concurrent_runs: 1

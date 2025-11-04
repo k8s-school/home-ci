@@ -45,7 +45,7 @@ repo_path: "/path/to/your/repo"
 check_interval: 5m
 test_script: "scripts/test.sh"
 test_timeout: 10m
-max_commit_age: 24h
+recent_commits_within: 24h
 fetch_remote: true
 max_concurrent_runs: 2
 

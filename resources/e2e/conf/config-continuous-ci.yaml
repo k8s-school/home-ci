@@ -3,7 +3,7 @@ repo_name: "continuous-ci-repo"
 check_interval: 5s
 test_script: "e2e/run-e2e.sh"
 options: ""
-max_commit_age: 240h
+recent_commits_within: 240h
 test_timeout: 30s
 fetch_remote: false
 max_concurrent_runs: 10

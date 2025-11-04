@@ -3,7 +3,7 @@ repo_name: "quick-repo"
 check_interval: 2s
 test_script: "e2e/run-e2e.sh"
 options: "-c -i ztf"
-max_commit_age: 240h
+recent_commits_within: 240h
 test_timeout: 5s  # Very fast timeout for quick testing
 fetch_remote: false
 max_concurrent_runs: 1

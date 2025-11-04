@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/k8s-school/home-ci/internal/cache"
 	"github.com/k8s-school/home-ci/internal/config"
 )
 
@@ -72,7 +71,6 @@ type TestRunner struct {
 	ctx          context.Context
 	semaphore    chan struct{} // Semaphore to limit concurrency
 	stateManager StateManager  // State manager for tracking running tests
-	repoCache    *cache.RepositoryCache // Repository cache manager
 }
 
 // TestExecution encapsulates a single test execution context
@@ -91,11 +89,6 @@ type TestExecution struct {
 
 // NewTestRunner creates a new test runner instance
 func NewTestRunner(cfg config.Config, configPath, logDir string, ctx context.Context, stateManager StateManager) *TestRunner {
-	// Create repository cache manager
-	repoOrigin := cfg.Repository
-
-	repoCache := cache.NewRepositoryCache(cfg.CacheDir, cfg.RepoName, repoOrigin)
-
 	return &TestRunner{
 		config:       cfg,
 		configPath:   configPath,
@@ -104,7 +97,6 @@ func NewTestRunner(cfg config.Config, configPath, logDir string, ctx context.Con
 		ctx:          ctx,
 		semaphore:    make(chan struct{}, cfg.MaxConcurrentRuns),
 		stateManager: stateManager,
-		repoCache:    repoCache,
 	}
 }
 

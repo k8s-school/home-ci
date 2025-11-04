@@ -3,7 +3,7 @@ repo_name: "dispatch-all-repo"
 check_interval: 10s
 test_script: "e2e/run-e2e.sh"
 options: "-c -i ztf"
-max_commit_age: 240h
+recent_commits_within: 240h
 test_timeout: 20s  # Short enough to timeout on bugfix/timeout branch tests
 fetch_remote: false
 max_concurrent_runs: 1

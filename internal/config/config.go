@@ -38,7 +38,7 @@ type Config struct {
 	TestScript             string                 `yaml:"test_script"`
 	MaxConcurrentRuns      int                    `yaml:"max_concurrent_runs"`
 	Options                string                 `yaml:"options"`
-	MaxCommitAge           time.Duration          `yaml:"max_commit_age"`
+	RecentCommitsWithin    time.Duration          `yaml:"recent_commits_within"`
 	TestTimeout            time.Duration          `yaml:"test_timeout"`
 	FetchRemote            bool                   `yaml:"fetch_remote"`
 	KeepTime               time.Duration          `yaml:"keep_time"`
@@ -66,7 +66,7 @@ func Load(path string) (Config, error) {
 		TestScript:        "e2e/run.sh",
 		MaxConcurrentRuns: 2,
 		Options:           "-c -i ztf",
-		MaxCommitAge:      240 * time.Hour, // 10 days
+		RecentCommitsWithin: 240 * time.Hour, // 10 days
 		TestTimeout:       30 * time.Minute, // 30 minutes default timeout
 		FetchRemote:       true,            // By default, fetch from remote
 		KeepTime:          0,               // By default, delete repositories immediately after tests

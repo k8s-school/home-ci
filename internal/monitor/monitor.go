@@ -6,10 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/k8s-school/home-ci/internal/cache"
 	"github.com/k8s-school/home-ci/internal/config"
 	"github.com/k8s-school/home-ci/internal/runner"
 	"github.com/k8s-school/home-ci/internal/state"
@@ -58,35 +56,10 @@ func NewCleanupManager(keepTime time.Duration, workspaceDir string, ctx context.
 }
 
 func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
-	var gitRepo *GitRepository
-	var err error
-
-	// Check if repository is remote or local
-	isRemoteRepo := strings.HasPrefix(cfg.Repository, "http://") || strings.HasPrefix(cfg.Repository, "https://")
-
-	if isRemoteRepo {
-		// Set up cache for remote repository monitoring
-		slog.Debug("Setting up cache for remote repository monitoring", "repository", cfg.Repository)
-
-		repoCache := cache.NewRepositoryCache(cfg.CacheDir, cfg.RepoName, cfg.Repository)
-		if err := repoCache.EnsureCache(); err != nil {
-			return nil, fmt.Errorf("failed to set up repository cache for monitoring: %w", err)
-		}
-
-		// Use the cache path as the local repository for monitoring
-		cachePath := repoCache.GetCachePath()
-		gitRepo, err = NewGitRepository(cachePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open cached repository at '%s': %w", cachePath, err)
-		}
-
-		slog.Debug("Using repository cache for monitoring", "cache_path", cachePath)
-	} else {
-		// Use local repository directly
-		gitRepo, err = NewGitRepository(cfg.Repository)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open git repository at '%s': %w\n\nPlease check your configuration:\n1. Ensure repository in %s points to a valid git repository\n2. Example: repository: \"/path/to/your/repo\"", cfg.Repository, configPath)
-		}
+	// Create git repository interface for both local and remote repositories
+	gitRepo, err := NewGitRepository(cfg.Repository, cfg.CacheDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize git repository interface for '%s': %w\n\nPlease check your configuration:\n1. Ensure repository points to a valid git repository\n2. Example: repository: \"/path/to/your/repo\" or \"https://github.com/user/repo.git\"", cfg.Repository, err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -130,7 +103,7 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 
 func (m *Monitor) Start() error {
 	slog.Debug("Starting Git CI Monitor")
-	slog.Debug("Configuration", "repository", m.config.Repository, "check_interval", m.config.CheckInterval, "max_concurrent_runs", m.config.MaxConcurrentRuns, "max_commit_age", m.config.MaxCommitAge, "options", m.config.Options)
+	slog.Debug("Configuration", "repository", m.config.Repository, "check_interval", m.config.CheckInterval, "max_concurrent_runs", m.config.MaxConcurrentRuns, "recent_commits_within", m.config.RecentCommitsWithin, "options", m.config.Options)
 
 	// Start test runner goroutine
 	go m.testRunner.Start()
@@ -173,29 +146,13 @@ func (m *Monitor) Stop() {
 func (m *Monitor) checkForUpdates() error {
 	slog.Debug("Checking for updates")
 
-	if err := m.fetchRemoteIfEnabled(); err != nil {
-		return err
-	}
-
-	branches, err := m.gitRepo.GetBranches(m.config.FetchRemote, m.config.MaxCommitAge)
+	branches, err := m.gitRepo.GetBranches(m.config.RecentCommitsWithin)
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}
 
 	m.processBranches(branches)
 	return m.stateManager.SaveState()
-}
-
-// fetchRemoteIfEnabled fetches remote changes if enabled in config
-func (m *Monitor) fetchRemoteIfEnabled() error {
-	if !m.config.FetchRemote {
-		return nil
-	}
-
-	if err := m.gitRepo.FetchRemote(); err != nil {
-		return fmt.Errorf("failed to fetch remote: %w", err)
-	}
-	return nil
 }
 
 // processBranches processes all branches for new commits
@@ -210,7 +167,7 @@ func (m *Monitor) processBranches(branches []string) {
 
 func (m *Monitor) processBranchWithDateFilter(branchName string) error {
 	// Get the latest commit for this branch
-	latestCommit, err := m.gitRepo.GetLatestCommitForBranch(branchName, m.config.MaxCommitAge)
+	latestCommit, err := m.gitRepo.GetLatestCommitForBranch(branchName, m.config.RecentCommitsWithin)
 	if err != nil {
 		return err
 	}
