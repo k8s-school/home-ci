@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -116,22 +117,52 @@ func showBranchesWithTestResults(repoPath string) {
 			})
 
 			for _, result := range results {
-				status := "❌ FAILED"
+				actual := "❌ FAILED"
 				if result.Success {
-					status = "✅ PASSED"
+					actual = "✅ PASSED"
 				} else if result.TimedOut {
-					status = "⏰ TIMEOUT"
+					actual = "⏰ TIMEOUT"
 				}
 
 				// Get commit message
 				commitMessage := getCommitMessage(repoPath, result.Commit)
+
+				// Determine expected result
+				expectedResult := determineExpectedResult(result.Branch, commitMessage)
 
 				duration := result.EndTime.Sub(result.StartTime)
 				fmt.Printf("   • Commit: %s\n", result.Commit)
 				if commitMessage != "" {
 					fmt.Printf("     Message: %s\n", commitMessage)
 				}
-				fmt.Printf("     Status: %s\n", status)
+
+				// Only show expected/status comparison if there's an expectation in the commit message
+				if expectedResult != "" {
+					expectedIcon := "❓"
+					switch expectedResult {
+					case "success":
+						expectedIcon = "✅"
+					case "failure":
+						expectedIcon = "❌"
+					case "timeout":
+						expectedIcon = "⏰"
+					}
+
+					// Compare expected vs actual
+					statusComparison := fmt.Sprintf("(%s=%s)", expectedResult, getActualResult(result))
+					if expectedResult == getActualResult(result) {
+						statusComparison = fmt.Sprintf("(✅ %s=%s)", expectedResult, getActualResult(result))
+					} else {
+						statusComparison = fmt.Sprintf("(❌ %s≠%s)", expectedResult, getActualResult(result))
+					}
+
+					fmt.Printf("     Expected: %s %s\n", expectedIcon, strings.ToUpper(expectedResult))
+					fmt.Printf("     Actual: %s\n", actual)
+					fmt.Printf("     Status: %s\n", statusComparison)
+				} else {
+					// No expectation found - just show actual result
+					fmt.Printf("     Actual: %s\n", actual)
+				}
 				fmt.Printf("     Start:  %s\n", result.StartTime.Format("2006-01-02 15:04:05"))
 				fmt.Printf("     End:    %s\n", result.EndTime.Format("2006-01-02 15:04:05"))
 				fmt.Printf("     Duration: %s\n", duration.Round(time.Second))
@@ -265,6 +296,54 @@ type TestResult struct {
 	ErrorMessage              string        `json:"error_message,omitempty"`
 	CleanupErrorMessage       string        `json:"cleanup_error_message,omitempty"`
 	GitHubActionsErrorMessage string        `json:"github_actions_error_message,omitempty"`
+}
+
+// TestExpectations represents the test expectations configuration
+type TestExpectations struct {
+	GlobalScenarios struct {
+		CommitPatterns []struct {
+			Pattern        string `yaml:"pattern"`
+			ExpectedResult string `yaml:"expected_result"`
+			Description    string `yaml:"description"`
+		} `yaml:"commit_patterns"`
+	} `yaml:"global_scenarios"`
+	BranchScenarios map[string]struct {
+		DefaultResult string `yaml:"default_result"`
+		Description   string `yaml:"description"`
+		SpecialCases  []struct {
+			CommitHashPrefix string `yaml:"commit_hash_prefix"`
+			ExpectedResult   string `yaml:"expected_result"`
+			Description      string `yaml:"description"`
+		} `yaml:"special_cases"`
+	} `yaml:"branch_scenarios"`
+}
+
+// determineExpectedResult determines the expected result based on commit message only
+func determineExpectedResult(branch, commitMessage string) string {
+	// Check commit message patterns only
+	if matched, _ := regexp.MatchString(".*FAIL.*", commitMessage); matched {
+		return "failure"
+	}
+	if matched, _ := regexp.MatchString(".*TIMEOUT.*", commitMessage); matched {
+		return "timeout"
+	}
+	if matched, _ := regexp.MatchString(".*SUCCESS.*", commitMessage); matched {
+		return "success"
+	}
+
+	// No pattern found in commit message - return empty string to indicate no expectation
+	return ""
+}
+
+// getActualResult returns the actual result string from a TestResult
+func getActualResult(result TestResult) string {
+	if result.TimedOut {
+		return "timeout"
+	} else if result.Success {
+		return "success"
+	} else {
+		return "failure"
+	}
 }
 
 
