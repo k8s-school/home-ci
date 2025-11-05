@@ -48,8 +48,9 @@ Provides insights into test execution, concurrency compliance, and branch timeli
 		isRemoteRepo := strings.HasPrefix(config.Repository, "http://") || strings.HasPrefix(config.Repository, "https://")
 
 		if isRemoteRepo {
-			// For remote repositories, use cache directory
-			repoPath = filepath.Join(config.CacheDir, config.RepoName)
+			// For remote repositories, use cache directory with URL-based naming (same as GitRepository)
+			repoName := strings.ReplaceAll(strings.ReplaceAll(config.Repository, "/", "_"), ":", "_")
+			repoPath = filepath.Join(config.CacheDir, repoName)
 		} else {
 			// For local repositories, use repository path directly
 			repoPath = config.Repository
