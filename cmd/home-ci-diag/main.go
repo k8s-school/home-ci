@@ -94,8 +94,6 @@ func main() {
 	}
 }
 
-
-
 // showBranchesWithTestResults displays git branches with their associated test results
 func showBranchesWithTestResults(repoPath string) {
 	fmt.Println("")
@@ -201,9 +199,7 @@ func getGitBranches(repoPath string) []string {
 		}
 
 		// Handle remote branches: remove "remotes/origin/" prefix
-		if strings.HasPrefix(line, "remotes/origin/") {
-			line = strings.TrimPrefix(line, "remotes/origin/")
-		}
+		line = strings.TrimPrefix(line, "remotes/origin/")
 
 		// Skip HEAD pointer
 		if strings.Contains(line, "HEAD ->") {

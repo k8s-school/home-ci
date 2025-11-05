@@ -104,7 +104,6 @@ func TestLoadGitHubToken(t *testing.T) {
 	}
 }
 
-
 func TestIntegrationNotifyGitHubActionsValidation(t *testing.T) {
 	// This test validates the notifyGitHubActions function with real dispatch including artifacts
 	secretPath := "../../secret.yaml"
@@ -210,45 +209,45 @@ func TestIntegrationLoadGitHubToken(t *testing.T) {
 
 func TestCreateClientPayload(t *testing.T) {
 	testCases := []struct {
-		name           string
-		branch         string
-		commit         string
-		success        bool
+		name                 string
+		branch               string
+		commit               string
+		success              bool
 		expectedArtifactName string
 	}{
 		{
-			name:           "main branch with long commit",
-			branch:         "main",
-			commit:         "9db6aa4a3510ebb74d92600c37dd1a529dd3d28e",
-			success:        true,
+			name:                 "main branch with long commit",
+			branch:               "main",
+			commit:               "9db6aa4a3510ebb74d92600c37dd1a529dd3d28e",
+			success:              true,
 			expectedArtifactName: "log-main-9db6aa4a",
 		},
 		{
-			name:           "feature branch with slash",
-			branch:         "feature/test-fail",
-			commit:         "e5b1eb34d902e067acf832dc97ecd407ab8988bc",
-			success:        false,
+			name:                 "feature branch with slash",
+			branch:               "feature/test-fail",
+			commit:               "e5b1eb34d902e067acf832dc97ecd407ab8988bc",
+			success:              false,
 			expectedArtifactName: "log-feature_test-fail-e5b1eb34",
 		},
 		{
-			name:           "bugfix branch with slash",
-			branch:         "bugfix/timeout",
-			commit:         "699226c8754caa8ca73bcdea567633342559c01e",
-			success:        true,
+			name:                 "bugfix branch with slash",
+			branch:               "bugfix/timeout",
+			commit:               "699226c8754caa8ca73bcdea567633342559c01e",
+			success:              true,
 			expectedArtifactName: "log-bugfix_timeout-699226c8",
 		},
 		{
-			name:           "short commit hash",
-			branch:         "develop",
-			commit:         "abcd123",
-			success:        true,
+			name:                 "short commit hash",
+			branch:               "develop",
+			commit:               "abcd123",
+			success:              true,
 			expectedArtifactName: "log-develop-abcd123",
 		},
 		{
-			name:           "multiple slashes in branch name",
-			branch:         "feature/nested/branch",
-			commit:         "1234567890abcdef",
-			success:        false,
+			name:                 "multiple slashes in branch name",
+			branch:               "feature/nested/branch",
+			commit:               "1234567890abcdef",
+			success:              false,
 			expectedArtifactName: "log-feature_nested_branch-12345678",
 		},
 	}

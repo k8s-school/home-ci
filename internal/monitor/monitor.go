@@ -15,9 +15,9 @@ import (
 
 const (
 	// Directory names
-	homeCIDirName    = ".home-ci"
-	stateFileName    = "state.json"
-	tmpHomeCIRepos   = "/tmp/home-ci/repos"
+	homeCIDirName  = ".home-ci"
+	stateFileName  = "state.json"
+	tmpHomeCIRepos = "/tmp/home-ci/repos"
 
 	// Cleanup intervals
 	defaultCleanupInterval = time.Hour
@@ -70,6 +70,7 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 	// Create .home-ci directory in repo for logs and state
 	homeCIDir := filepath.Join(actualRepoPath, homeCIDirName)
 	if err := os.MkdirAll(homeCIDir, dirPerm); err != nil {
+		cancel() // Clean up context on error
 		return nil, fmt.Errorf("failed to create .home-ci directory: %w", err)
 	}
 
@@ -78,6 +79,7 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 
 	// Load existing state
 	if err := stateManager.LoadState(); err != nil {
+		cancel() // Clean up context on error
 		return nil, fmt.Errorf("failed to load state: %w", err)
 	}
 

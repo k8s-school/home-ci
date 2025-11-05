@@ -13,7 +13,6 @@ import (
 	"github.com/k8s-school/home-ci/internal/logging"
 )
 
-
 var (
 	testType  string
 	duration  string
@@ -120,7 +119,7 @@ func runE2ETests() error {
 		durationVal = 75 * time.Second // Fixed duration for continuous CI test (optimized for speed)
 	case TestCacheLocal, TestCacheRemote:
 		durationVal = 45 * time.Second // Fixed duration for cache tests
-	// TestNormal and TestLong use user-specified duration
+		// TestNormal and TestLong use user-specified duration
 	}
 
 	slog.Info("🚀 Starting e2e test harness", "type", testTypeName[testTypeVal], "duration", durationVal)
@@ -208,4 +207,3 @@ func runE2ETests() error {
 		return NewTestExecutionError("test harness failed")
 	}
 }
-

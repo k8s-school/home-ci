@@ -151,7 +151,6 @@ func (th *E2ETestHarness) checkJSONForTimeout(jsonPath string) bool {
 	return result.TimedOut
 }
 
-
 // displayRunningTests shows current running tests with their details
 func (th *E2ETestHarness) displayRunningTests() {
 	if len(th.runningTests) == 0 {

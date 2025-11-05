@@ -70,7 +70,6 @@ func (th *E2ETestHarness) initializeRepoName(configPath string) error {
 	return fmt.Errorf("repo_name not found or empty in config file %s", configPath)
 }
 
-
 // getConfigForTestType returns config file name, content and type for the current test type
 func (th *E2ETestHarness) getConfigForTestType() (string, string, string) {
 	switch th.testType {
@@ -142,7 +141,6 @@ func (th *E2ETestHarness) loadTestExpectations() (*TestExpectationConfig, error)
 
 	return &config, nil
 }
-
 
 // getCacheLocalConfig returns config for cache-local test (fetchRemote: false)
 func (th *E2ETestHarness) getCacheLocalConfig() string {

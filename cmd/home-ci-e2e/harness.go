@@ -192,7 +192,7 @@ func (th *E2ETestHarness) setupTestRepo() error {
 // startHomeCI starts home-ci with the appropriate configuration
 func (th *E2ETestHarness) startHomeCI(configPath string) error {
 	if th.testType != TestTimeout {
-		slog.Info( "🚀 Starting home-ci process...")
+		slog.Info("🚀 Starting home-ci process...")
 	}
 
 	// Create a context with cancellation
@@ -257,7 +257,7 @@ func (th *E2ETestHarness) simulateActivity() {
 	for {
 		select {
 		case <-timeout:
-			slog.Info( "⏰ Activity simulation completed")
+			slog.Info("⏰ Activity simulation completed")
 			return
 		case <-ticker.C:
 			branch := branches[branchIndex%len(branches)]
@@ -272,7 +272,7 @@ func (th *E2ETestHarness) simulateActivity() {
 // simulateConcurrentActivity creates 6 commits on 6 different branches simultaneously
 // to test max_concurrent_runs=2 limitation and different test outcomes (success/timeout/failure)
 func (th *E2ETestHarness) simulateConcurrentActivity() {
-	slog.Info( "🎯 Starting concurrent limit test - creating 6 commits on 6 branches")
+	slog.Info("🎯 Starting concurrent limit test - creating 6 commits on 6 branches")
 
 	branches := []string{
 		"concurrent/test1",
@@ -293,7 +293,7 @@ func (th *E2ETestHarness) simulateConcurrentActivity() {
 	}
 
 	// Create all commits quickly to trigger concurrent execution
-	slog.Info( "📝 Creating commits on all branches...")
+	slog.Info("📝 Creating commits on all branches...")
 	for i, branch := range branches {
 		if err := th.createCommitWithMessage(branch, commitMessages[i]); err != nil {
 			slog.Info("❌ Failed to create commit", "branch", branch, "error", err)
@@ -304,13 +304,13 @@ func (th *E2ETestHarness) simulateConcurrentActivity() {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	slog.Info( "🏁 All concurrent test commits created (including timeout and failure tests)")
+	slog.Info("🏁 All concurrent test commits created (including timeout and failure tests)")
 }
 
 // simulateContinuousActivity simulates continuous integration with variable commit timing
 // Tests max_concurrent_runs=3 with realistic developer workflow
 func (th *E2ETestHarness) simulateContinuousActivity() {
-	slog.Info( "🎯 Starting continuous CI test - simulating active development")
+	slog.Info("🎯 Starting continuous CI test - simulating active development")
 
 	// Start with existing branches with different commit types
 	initialBranches := map[string]string{
@@ -320,7 +320,7 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 	}
 
 	// Create initial commits
-	slog.Info( "📝 Creating initial commits on existing branches...")
+	slog.Info("📝 Creating initial commits on existing branches...")
 	for branch, message := range initialBranches {
 		if err := th.createCommitWithMessage(branch, message); err != nil {
 			slog.Info("❌ Failed to create initial commit", "branch", branch, "error", err)
@@ -364,7 +364,7 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 
 			select {
 			case <-timeout:
-				slog.Info( "⏰ Continuous CI simulation completed (timeout)")
+				slog.Info("⏰ Continuous CI simulation completed (timeout)")
 				return
 			case <-timer:
 				if commitIndex < len(commitPlans) {
@@ -637,7 +637,6 @@ func (th *E2ETestHarness) processTestResultsInDirectory(files []os.DirEntry, dir
 	log.Println("===============================")
 	return !hasErrors
 }
-
 
 // getCommitMessage retrieves the commit message for a given commit hash using go-git API
 func (th *E2ETestHarness) getCommitMessage(commit string) string {

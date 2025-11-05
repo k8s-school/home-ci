@@ -61,7 +61,7 @@ type E2ETestHarness struct {
 	homeCIProcess *exec.Cmd
 	homeCIContext context.Context
 	homeCICancel  context.CancelFunc
-	noCleanup     bool // Skip cleanup for debugging
+	noCleanup     bool      // Skip cleanup for debugging
 	startTime     time.Time // When this e2e test harness started
 
 	// Statistics
@@ -175,11 +175,6 @@ func parseTestType(s string) (TestType, error) {
 // isSingleCommitTest returns true for tests that need only one commit
 func (tt TestType) isSingleCommitTest() bool {
 	return tt == TestSuccess || tt == TestFail || tt == TestTimeout || tt == TestDispatchOneSuccess || tt == TestDispatchNoTokenFile
-}
-
-// isMultiCommitTest returns true for tests that need multiple commits
-func (tt TestType) isMultiCommitTest() bool {
-	return tt == TestQuick || tt == TestDispatchAll || tt == TestNormal || tt == TestLong || tt == TestConcurrentLimit || tt == TestContinuousCI
 }
 
 // getTestDirectory returns the base directory for this test type

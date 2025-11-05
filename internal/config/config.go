@@ -11,10 +11,10 @@ import (
 )
 
 type GitHubActionsDispatch struct {
-	Enabled          bool   `yaml:"enabled"`
-	GitHubRepo       string `yaml:"github_repo"`
-	GitHubTokenFile  string `yaml:"github_token_file"`
-	DispatchType     string `yaml:"dispatch_type"`
+	Enabled         bool   `yaml:"enabled"`
+	GitHubRepo      string `yaml:"github_repo"`
+	GitHubTokenFile string `yaml:"github_token_file"`
+	DispatchType    string `yaml:"dispatch_type"`
 }
 
 type Cleanup struct {
@@ -24,50 +24,48 @@ type Cleanup struct {
 
 type Config struct {
 	// Repository configuration
-	Repository             string                 `yaml:"repository"`  // Git repository URL or path
-	RepoName               string                 `yaml:"repo_name"`   // Repository name for organization
+	Repository string `yaml:"repository"` // Git repository URL or path
+	RepoName   string `yaml:"repo_name"`  // Repository name for organization
 
 	// Directory structure
-	CacheDir               string                 `yaml:"cache_dir"`
-	StateDir               string                 `yaml:"state_dir"`
-	WorkspaceDir           string                 `yaml:"workspace_dir"`
-	LogDir                 string                 `yaml:"log_dir"`
+	CacheDir     string `yaml:"cache_dir"`
+	StateDir     string `yaml:"state_dir"`
+	WorkspaceDir string `yaml:"workspace_dir"`
+	LogDir       string `yaml:"log_dir"`
 
 	// Test configuration
-	CheckInterval          time.Duration          `yaml:"check_interval"`
-	TestScript             string                 `yaml:"test_script"`
-	MaxConcurrentRuns      int                    `yaml:"max_concurrent_runs"`
-	Options                string                 `yaml:"options"`
-	RecentCommitsWithin    time.Duration          `yaml:"recent_commits_within"`
-	TestTimeout            time.Duration          `yaml:"test_timeout"`
-	KeepTime               time.Duration          `yaml:"keep_time"`
-	Cleanup                Cleanup                `yaml:"cleanup"`
-	GitHubActionsDispatch  GitHubActionsDispatch  `yaml:"github_actions_dispatch"`
+	CheckInterval         time.Duration         `yaml:"check_interval"`
+	TestScript            string                `yaml:"test_script"`
+	MaxConcurrentRuns     int                   `yaml:"max_concurrent_runs"`
+	Options               string                `yaml:"options"`
+	RecentCommitsWithin   time.Duration         `yaml:"recent_commits_within"`
+	TestTimeout           time.Duration         `yaml:"test_timeout"`
+	KeepTime              time.Duration         `yaml:"keep_time"`
+	Cleanup               Cleanup               `yaml:"cleanup"`
+	GitHubActionsDispatch GitHubActionsDispatch `yaml:"github_actions_dispatch"`
 }
 
 func Load(path string) (Config, error) {
-	var config Config
-
 	// Default config
-	config = Config{
+	config := Config{
 		// Repository configuration
-		Repository:        "",
-		RepoName:          "",
+		Repository: "",
+		RepoName:   "",
 
 		// Directory structure with Linux FHS standard defaults
-		CacheDir:          "/var/cache/home-ci",
-		StateDir:          "/var/lib/home-ci/state",
-		WorkspaceDir:      "/var/lib/home-ci/workspaces",
-		LogDir:            "/var/log/home-ci",
+		CacheDir:     "/var/cache/home-ci",
+		StateDir:     "/var/lib/home-ci/state",
+		WorkspaceDir: "/var/lib/home-ci/workspaces",
+		LogDir:       "/var/log/home-ci",
 
 		// Test configuration
-		CheckInterval:     5 * time.Minute,
-		TestScript:        "e2e/run.sh",
-		MaxConcurrentRuns: 2,
-		Options:           "-c -i ztf",
-		RecentCommitsWithin: 240 * time.Hour, // 10 days
-		TestTimeout:       30 * time.Minute, // 30 minutes default timeout
-		KeepTime:          0,               // By default, delete repositories immediately after tests
+		CheckInterval:       5 * time.Minute,
+		TestScript:          "e2e/run.sh",
+		MaxConcurrentRuns:   2,
+		Options:             "-c -i ztf",
+		RecentCommitsWithin: 240 * time.Hour,  // 10 days
+		TestTimeout:         30 * time.Minute, // 30 minutes default timeout
+		KeepTime:            0,                // By default, delete repositories immediately after tests
 		Cleanup: Cleanup{
 			AfterE2E: true,
 			Script:   "",
