@@ -117,43 +117,61 @@ func showBranchesWithTestResults(repoPath string) {
 		branchResults[result.Branch] = append(branchResults[result.Branch], result)
 	}
 
-	// Display each branch with its test results
+	// Display only branches with test results
+	branchesWithResults := make([]string, 0)
 	for _, branch := range branches {
+		if _, exists := branchResults[branch]; exists {
+			branchesWithResults = append(branchesWithResults, branch)
+		}
+	}
+
+	if len(branchesWithResults) == 0 {
+		fmt.Println("\n   No branches with test results found")
+		return
+	}
+
+	// Display each branch with its test results
+	for _, branch := range branchesWithResults {
 		fmt.Printf("\n🌿 %s\n", branch)
 
-		if results, exists := branchResults[branch]; exists {
-			// Sort results by start time (most recent first)
-			sort.Slice(results, func(i, j int) bool {
-				return results[i].StartTime.After(results[j].StartTime)
-			})
+		results := branchResults[branch]
+		// Sort results by start time (most recent first)
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].StartTime.After(results[j].StartTime)
+		})
 
-			for _, result := range results {
-				actual := "❌ FAILED"
-				if result.Success {
-					actual = "✅ PASSED"
-				} else if result.TimedOut {
-					actual = "⏰ TIMEOUT"
-				}
-
-				// Get commit message
-				commitMessage := getCommitMessage(repoPath, result.Commit)
-
-				duration := result.EndTime.Sub(result.StartTime)
-				fmt.Printf("   • Commit: %s\n", result.Commit)
-				if commitMessage != "" {
-					fmt.Printf("     Message: %s\n", commitMessage)
-				}
-				fmt.Printf("     Status: %s\n", actual)
-				fmt.Printf("     Start:  %s\n", result.StartTime.Format("2006-01-02 15:04:05"))
-				fmt.Printf("     End:    %s\n", result.EndTime.Format("2006-01-02 15:04:05"))
-				fmt.Printf("     Duration: %s\n", duration.Round(time.Second))
-				if result.ErrorMessage != "" {
-					fmt.Printf("     Error: %s\n", result.ErrorMessage)
-				}
-				fmt.Println()
+		for _, result := range results {
+			actual := "❌ FAILED"
+			if result.Success {
+				actual = "✅ PASSED"
+			} else if result.TimedOut {
+				actual = "⏰ TIMEOUT"
 			}
-		} else {
-			fmt.Println("   No test results found for this branch")
+
+			// Get commit message
+			commitMessage := getCommitMessage(repoPath, result.Commit)
+
+			// Build log file path - need to get config to determine log directory
+			config, err := readConfig(configPath)
+			logPath := result.LogFile // fallback to just filename
+			if err == nil && config.LogDir != "" && config.RepoName != "" {
+				logPath = filepath.Join(config.LogDir, config.RepoName, "tests", result.LogFile)
+			}
+
+			duration := result.EndTime.Sub(result.StartTime)
+			fmt.Printf("   • Commit: %s\n", result.Commit)
+			if commitMessage != "" {
+				fmt.Printf("     Message: %s\n", commitMessage)
+			}
+			fmt.Printf("     Status: %s\n", actual)
+			fmt.Printf("     Start:  %s\n", result.StartTime.Format("2006-01-02 15:04:05"))
+			fmt.Printf("     End:    %s\n", result.EndTime.Format("2006-01-02 15:04:05"))
+			fmt.Printf("     Duration: %s\n", duration.Round(time.Second))
+			fmt.Printf("     Log: %s\n", logPath)
+			if result.ErrorMessage != "" {
+				fmt.Printf("     Error: %s\n", result.ErrorMessage)
+			}
+			fmt.Println()
 		}
 	}
 }
