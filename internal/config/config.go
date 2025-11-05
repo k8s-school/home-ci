@@ -40,7 +40,6 @@ type Config struct {
 	Options                string                 `yaml:"options"`
 	RecentCommitsWithin    time.Duration          `yaml:"recent_commits_within"`
 	TestTimeout            time.Duration          `yaml:"test_timeout"`
-	FetchRemote            bool                   `yaml:"fetch_remote"`
 	KeepTime               time.Duration          `yaml:"keep_time"`
 	Cleanup                Cleanup                `yaml:"cleanup"`
 	GitHubActionsDispatch  GitHubActionsDispatch  `yaml:"github_actions_dispatch"`
@@ -68,7 +67,6 @@ func Load(path string) (Config, error) {
 		Options:           "-c -i ztf",
 		RecentCommitsWithin: 240 * time.Hour, // 10 days
 		TestTimeout:       30 * time.Minute, // 30 minutes default timeout
-		FetchRemote:       true,            // By default, fetch from remote
 		KeepTime:          0,               // By default, delete repositories immediately after tests
 		Cleanup: Cleanup{
 			AfterE2E: true,

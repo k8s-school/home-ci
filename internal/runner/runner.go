@@ -306,41 +306,9 @@ func (te *TestExecution) setupRepository() error {
 	return te.directCloneToWorkspace()
 }
 
-// directCloneToWorkspace clones the repository to workspace, preferring cache when available
+// directCloneToWorkspace clones the repository directly from upstream for full history
 func (te *TestExecution) directCloneToWorkspace() error {
-	// Check if we can clone from cache first (much faster)
-	cacheDir := te.getCacheDirectory()
-	if te.canUseCache(cacheDir) {
-		fmt.Fprintf(te.logFile, "Cloning from local cache for faster setup...\n")
-		return te.cloneFromCache(cacheDir)
-	}
-
-	fmt.Fprintf(te.logFile, "Cache not available, cloning from origin...\n")
-
-	return te.cloneFromOrigin()
-}
-
-// getCacheDirectory determines the cache directory path for this repository
-func (te *TestExecution) getCacheDirectory() string {
-	// Create cache directory path based on repository URL, similar to GitRepository
-	repoName := strings.ReplaceAll(strings.ReplaceAll(te.runner.config.Repository, "/", "_"), ":", "_")
-	return filepath.Join(te.runner.config.CacheDir, repoName)
-}
-
-// canUseCache checks if the cache directory exists and is valid
-func (te *TestExecution) canUseCache(cacheDir string) bool {
-	// Check if cache directory exists
-	if _, err := os.Stat(filepath.Join(cacheDir, ".git")); err != nil {
-		return false
-	}
-	return true
-}
-
-// cloneFromCache clones the repository directly from upstream for full history
-func (te *TestExecution) cloneFromCache(cacheDir string) error {
-	fmt.Fprintf(te.logFile, "Cache available but cloning directly from upstream for full history...\n")
-
-	// Clone directly from upstream with full history for testing
+	fmt.Fprintf(te.logFile, "Cloning directly from upstream for full history...\n")
 	return te.cloneFromOrigin()
 }
 
