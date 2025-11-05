@@ -483,17 +483,21 @@ func showExecutionTimeline(testResults []TestResult, maxConcurrentLimit int) {
 
 	var events []TimelineEvent
 	for _, result := range testResults {
+		commitShort := result.Commit
+		if len(commitShort) > 8 {
+			commitShort = commitShort[:8]
+		}
 		events = append(events, TimelineEvent{
 			Time:   result.StartTime,
 			Type:   "start",
 			Branch: result.Branch,
-			Commit: result.Commit[:8],
+			Commit: commitShort,
 		})
 		events = append(events, TimelineEvent{
 			Time:   result.EndTime,
 			Type:   "end",
 			Branch: result.Branch,
-			Commit: result.Commit[:8],
+			Commit: commitShort,
 		})
 	}
 
@@ -682,9 +686,15 @@ func checkBranchTimelines(repoPath string, configPath string) {
 	for _, result := range testResults {
 		testsByCommit[result.Commit] = result
 		testsByBranch[result.Branch] = append(testsByBranch[result.Branch], result)
-		slog.Debug("Found test", "branch", result.Branch, "commit", result.Commit[:8], "success", result.Success)
+		commitShort := result.Commit
+		if len(commitShort) > 8 {
+			commitShort = commitShort[:8]
+		}
+		slog.Debug("Found test", "branch", result.Branch, "commit", commitShort, "success", result.Success)
 	}
 
+	// Only process branches that have test results
+	branchesWithTests := make([]string, 0)
 	for _, branch := range branches {
 		if strings.Contains(branch, "->") || strings.HasPrefix(branch, "remotes/") {
 			continue // Skip remote branch references
@@ -695,6 +705,18 @@ func checkBranchTimelines(repoPath string, configPath string) {
 			continue
 		}
 
+		// Check if this branch has test results
+		if branchTests := testsByBranch[branch]; len(branchTests) > 0 {
+			branchesWithTests = append(branchesWithTests, branch)
+		}
+	}
+
+	if len(branchesWithTests) == 0 {
+		fmt.Println("\n   No branches with test results found for timeline analysis")
+		return
+	}
+
+	for _, branch := range branchesWithTests {
 		fmt.Printf("\n📋 Branch: %s\n", branch)
 		fmt.Println("┌─────────────────────┬───────────┬─────────────────────┬─────────────┬─────────────────────────────────────┐")
 		fmt.Println("│       Commit        │    Type   │        Date         │   Result    │               Message               │")
@@ -739,11 +761,6 @@ func checkBranchTimelines(repoPath string, configPath string) {
 			})
 		}
 
-		// Skip branch if no events
-		if len(events) == 0 {
-			continue
-		}
-
 		// Sort events by time
 		sort.Slice(events, func(i, j int) bool {
 			return events[i].Time.Before(events[j].Time)
@@ -751,7 +768,10 @@ func checkBranchTimelines(repoPath string, configPath string) {
 
 		// Display events
 		for _, event := range events {
-			commitShort := event.CommitHash[:8]
+			commitShort := event.CommitHash
+			if len(commitShort) > 8 {
+				commitShort = commitShort[:8]
+			}
 			timeStr := event.Time.Format("2006-01-02 15:04:05")
 			message := event.Message
 			if len(message) > 35 {
@@ -780,7 +800,7 @@ func checkBranchTimelines(repoPath string, configPath string) {
 	fmt.Println("\n🔍 Workflow Consistency Analysis")
 	fmt.Println("=================================")
 
-	validateWorkflowConsistency(repoPath, branches, testsByBranch, checkInterval)
+	validateWorkflowConsistency(repoPath, branchesWithTests, testsByBranch, checkInterval)
 }
 
 // validateWorkflowConsistency checks that test/commit workflow follows home-ci logic
@@ -858,7 +878,11 @@ func analyzeTestingPattern(branch, headCommit string, commits []CommitInfo, test
 	issues := 0
 
 	fmt.Printf("\n🌿 Branch: %s\n", branch)
-	fmt.Printf("   HEAD: %s\n", headCommit[:8])
+	headCommitShort := headCommit
+	if len(headCommitShort) > 8 {
+		headCommitShort = headCommitShort[:8]
+	}
+	fmt.Printf("   HEAD: %s\n", headCommitShort)
 
 	// Check if HEAD commit has been tested
 	headTested := false
@@ -932,9 +956,17 @@ func validateTestInterval(tests []TestResult, commitTimes map[string]time.Time, 
 		// then multiple tests make sense
 		timeBetweenCommits := currentCommitTime.Sub(prevCommitTime)
 		if timeBetweenCommits > interval {
+			prevCommitShort := prevTest.Commit
+			if len(prevCommitShort) > 8 {
+				prevCommitShort = prevCommitShort[:8]
+			}
+			currentCommitShort := currentTest.Commit
+			if len(currentCommitShort) > 8 {
+				currentCommitShort = currentCommitShort[:8]
+			}
 			slog.Debug("Valid test interval",
-				"prevCommit", prevTest.Commit[:8],
-				"currentCommit", currentTest.Commit[:8],
+				"prevCommit", prevCommitShort,
+				"currentCommit", currentCommitShort,
 				"timeBetween", timeBetweenCommits,
 				"interval", interval)
 		}
