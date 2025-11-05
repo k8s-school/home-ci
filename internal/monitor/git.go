@@ -193,11 +193,11 @@ func (gr *GitRepository) ensureCachedRepo() (*git.Repository, error) {
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
-	// Clone repository with shallow depth for efficiency
+	// Clone repository with shallow depth for monitoring efficiency
 	slog.Debug("Creating cached repository", "repository", gr.repoPath, "cache_dir", gr.cacheDir)
 	repo, err := git.PlainClone(gr.cacheDir, false, &git.CloneOptions{
 		URL:   gr.repoPath,
-		Depth: 1, // Shallow clone for performance
+		Depth: 1, // Shallow clone for efficient monitoring
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repository to cache: %w", err)
@@ -476,12 +476,12 @@ func (gr *GitRepository) getRemoteCommitInfo(branchName string, recentCommitsWit
 		return gr.createSyntheticCommit(targetRef.Hash(), branchName), nil
 	}
 
-	// Fetch only the commit we need
+	// Fetch only the latest commit for monitoring efficiency
 	err = remote.Fetch(&git.FetchOptions{
 		RefSpecs: []config.RefSpec{
 			config.RefSpec(fmt.Sprintf("%s:%s", targetRef.Name(), targetRef.Name())),
 		},
-		Depth: 1, // Shallow fetch for performance
+		Depth: 1, // Shallow fetch for monitoring performance
 	})
 	if err != nil {
 		slog.Debug("Failed to fetch commit, using synthetic commit", "branch", branchName, "error", err)

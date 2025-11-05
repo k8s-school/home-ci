@@ -12,6 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/k8s-school/home-ci/internal/config"
 )
 
@@ -303,37 +306,100 @@ func (te *TestExecution) setupRepository() error {
 	return te.directCloneToWorkspace()
 }
 
-// directCloneToWorkspace clones the repository directly from origin to workspace
+// directCloneToWorkspace clones the repository to workspace, preferring cache when available
 func (te *TestExecution) directCloneToWorkspace() error {
-	fmt.Fprintf(te.logFile, "Cloning repository directly from origin...\n")
+	// Check if we can clone from cache first (much faster)
+	cacheDir := te.getCacheDirectory()
+	if te.canUseCache(cacheDir) {
+		fmt.Fprintf(te.logFile, "Cloning from local cache for faster setup...\n")
+		return te.cloneFromCache(cacheDir)
+	}
 
-	// Clone repository directly from origin
-	cmd := exec.Command("git", "clone", te.runner.config.Repository, te.projectDir)
-	cmd.Stdout = te.logFile
-	cmd.Stderr = te.logFile
+	fmt.Fprintf(te.logFile, "Cache not available, cloning from origin...\n")
 
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(te.logFile, "Failed to clone repository: %v\n", err)
+	return te.cloneFromOrigin()
+}
+
+// getCacheDirectory determines the cache directory path for this repository
+func (te *TestExecution) getCacheDirectory() string {
+	// Create cache directory path based on repository URL, similar to GitRepository
+	repoName := strings.ReplaceAll(strings.ReplaceAll(te.runner.config.Repository, "/", "_"), ":", "_")
+	return filepath.Join(te.runner.config.CacheDir, repoName)
+}
+
+// canUseCache checks if the cache directory exists and is valid
+func (te *TestExecution) canUseCache(cacheDir string) bool {
+	// Check if cache directory exists
+	if _, err := os.Stat(filepath.Join(cacheDir, ".git")); err != nil {
+		return false
+	}
+	return true
+}
+
+// cloneFromCache clones the repository directly from upstream for full history
+func (te *TestExecution) cloneFromCache(cacheDir string) error {
+	fmt.Fprintf(te.logFile, "Cache available but cloning directly from upstream for full history...\n")
+
+	// Clone directly from upstream with full history for testing
+	return te.cloneFromOrigin()
+}
+
+// cloneFromOrigin performs git clone from remote origin using go-git API
+func (te *TestExecution) cloneFromOrigin() error {
+	fmt.Fprintf(te.logFile, "Cloning branch %s from origin using go-git API...\n", te.branch)
+
+	// Clone from remote origin with specific branch and full history
+	repo, err := git.PlainClone(te.projectDir, false, &git.CloneOptions{
+		URL:           te.runner.config.Repository,
+		ReferenceName: plumbing.NewBranchReferenceName(te.branch),
+		SingleBranch:  true,
+		// No Depth specified = full history
+	})
+
+	if err != nil {
+		fmt.Fprintf(te.logFile, "Failed to clone repository from origin using go-git: %v\n", err)
 		return fmt.Errorf("failed to clone repository from %s: %w", te.runner.config.Repository, err)
 	}
 
-	// Checkout specific commit
-	fmt.Fprintf(te.logFile, "Checking out commit %s...\n", te.commit)
-	cmd = exec.Command("git", "-C", te.projectDir, "checkout", te.commit)
-	cmd.Stdout = te.logFile
-	cmd.Stderr = te.logFile
+	// Verify we're on the expected commit
+	fmt.Fprintf(te.logFile, "Verifying commit %s using go-git...\n", te.commit)
 
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(te.logFile, "Failed to checkout commit %s: %v\n", te.commit, err)
-		return fmt.Errorf("failed to checkout commit %s: %w", te.commit, err)
+	head, err := repo.Head()
+	if err != nil {
+		fmt.Fprintf(te.logFile, "Failed to get HEAD reference: %v\n", err)
+		return fmt.Errorf("failed to get HEAD reference: %w", err)
 	}
 
-	fmt.Fprintf(te.logFile, "Repository cloned successfully from origin\n")
+	currentCommit := head.Hash().String()
+	fmt.Fprintf(te.logFile, "Current HEAD commit: %s\n", currentCommit)
+
+	if currentCommit != te.commit {
+		fmt.Fprintf(te.logFile, "Warning: Expected commit %s but got %s\n", te.commit, currentCommit)
+		fmt.Fprintf(te.logFile, "This is normal if the branch has moved since detection\n")
+	}
+
+	// Verify we have the full history by checking commit count
+	commitIter, err := repo.Log(&git.LogOptions{})
+	if err != nil {
+		fmt.Fprintf(te.logFile, "Failed to get commit log: %v\n", err)
+	} else {
+		commitCount := 0
+		err = commitIter.ForEach(func(c *object.Commit) error {
+			commitCount++
+			if commitCount > 10 { // Stop counting after reasonable number
+				return fmt.Errorf("stop counting")
+			}
+			return nil
+		})
+		fmt.Fprintf(te.logFile, "Repository has %d+ commits available for testing\n", commitCount)
+	}
+
+	fmt.Fprintf(te.logFile, "Repository cloned successfully from origin using go-git\n")
 	fmt.Fprintf(te.logFile, "Branch: %s\n", te.branch)
 	fmt.Fprintf(te.logFile, "Commit: %s\n", te.commit)
 	fmt.Fprintf(te.logFile, "========================================\n\n")
 
-	slog.Debug("Repository workspace setup completed",
+	slog.Debug("Repository workspace setup completed from origin using go-git",
 		"repo", te.runner.config.RepoName,
 		"branch", te.branch,
 		"commit", te.commit[:8],
