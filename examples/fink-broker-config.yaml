@@ -15,7 +15,7 @@ log_dir: "/tmp/home-ci/log"
 # Test configuration
 check_interval: 30s
 test_script: "e2e/run.sh"
-options: "-c"
+options: "-c -s"
 recent_commits_within: 240h
 test_timeout: 60m
 fetch_remote: true
