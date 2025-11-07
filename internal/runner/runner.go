@@ -233,8 +233,18 @@ func (te *TestExecution) cleanup() {
 		te.runner.stateManager.SaveState()
 	}
 
-	// Clean up workspace directory if immediate cleanup is needed
-	if te.runner.config.KeepTime == 0 && te.workspaceDir != "" {
+	// Clean up workspace directory if immediate cleanup is needed,
+	// but skip cleanup for manual runs (no state manager) and just inform user
+	if te.runner.stateManager == nil {
+		// Manual run - just inform user about created files
+		fmt.Printf("\n=== Manual Test Run Completed ===\n")
+		fmt.Printf("Created files (you can clean up manually):\n")
+		fmt.Printf("- Workspace: %s\n", te.workspaceDir)
+		fmt.Printf("- Log file: %s\n", te.logFilePath)
+		fmt.Printf("- Result file: %s\n", te.resultFilePath)
+		fmt.Printf("===================================\n")
+	} else if te.runner.config.KeepTime == 0 && te.workspaceDir != "" {
+		// Automated run with immediate cleanup
 		os.RemoveAll(te.workspaceDir)
 	}
 }
@@ -384,7 +394,12 @@ func (te *TestExecution) executeTest() error {
 	defer testCancel()
 
 	// Setup command
-	scriptPath := filepath.Join(te.projectDir, te.runner.config.TestScript)
+	var scriptPath string
+	if filepath.IsAbs(te.runner.config.TestScript) {
+		scriptPath = te.runner.config.TestScript
+	} else {
+		scriptPath = filepath.Join(te.projectDir, te.runner.config.TestScript)
+	}
 	cmd := exec.CommandContext(testCtx, scriptPath, args...)
 	cmd.Dir = te.projectDir
 	cmd.Stdout = io.MultiWriter(os.Stdout, te.logFile)
@@ -563,4 +578,74 @@ func (tr *TestRunner) saveTestResult(result TestResult, filePath string) error {
 	}
 
 	return nil
+}
+
+// RunTestsManually executes a test manually without state management
+func (tr *TestRunner) RunTestsManually(branch, commit string) error {
+	slog.Info("Running manual test execution", "branch", branch, "commit", commit[:8], "timeout", tr.config.TestTimeout)
+
+	// Initialize manual test execution context
+	execution := tr.newManualTestExecution(branch, commit)
+	defer execution.cleanup()
+
+	// Setup logging
+	if err := execution.setupLogging(); err != nil {
+		return err
+	}
+
+	// Setup repository
+	if err := execution.setupRepository(); err != nil {
+		return err
+	}
+
+	// Execute the test
+	if err := execution.executeTest(); err != nil {
+		execution.testResult.ErrorMessage = err.Error()
+		return err
+	}
+
+	// Post-execution tasks
+	execution.runCleanupIfNeeded()
+	execution.sendGitHubNotificationIfNeeded()
+
+	slog.Info("Manual test execution completed", "branch", branch, "commit", commit[:8], "success", execution.testResult.Success)
+	return nil
+}
+
+// newManualTestExecution creates a new test execution context for manual runs
+func (tr *TestRunner) newManualTestExecution(branch, commit string) *TestExecution {
+	startTime := time.Now()
+	timestamp := startTime.Format("20060102-150405")
+	branchFile := strings.ReplaceAll(branch, "/", "-")
+
+	// Create unique workspace ID with "run" prefix
+	workspaceID := fmt.Sprintf("run_%s_%s_%s", branchFile, commit[:8], timestamp)
+
+	// Set up paths using new directory structure with "run" prefix
+	logFileName := fmt.Sprintf("run_%s.log", workspaceID)
+	resultFileName := fmt.Sprintf("run_%s.json", workspaceID)
+
+	// Create workspace directory in the configured workspace directory
+	workspaceDir := filepath.Join(tr.config.WorkspaceDir, workspaceID)
+	projectDir := filepath.Join(workspaceDir, tr.config.RepoName)
+
+	// Create log directory for this repository if it doesn't exist
+	repoLogDir := filepath.Join(tr.config.LogDir, tr.config.RepoName)
+
+	return &TestExecution{
+		runner:         tr,
+		branch:         branch,
+		commit:         commit,
+		startTime:      startTime,
+		logFilePath:    filepath.Join(repoLogDir, "tests", logFileName),
+		resultFilePath: filepath.Join(repoLogDir, "results", resultFileName),
+		workspaceDir:   workspaceDir,
+		projectDir:     projectDir,
+		testResult: &TestResult{
+			Branch:    branch,
+			Commit:    commit,
+			LogFile:   logFileName,
+			StartTime: startTime,
+		},
+	}
 }

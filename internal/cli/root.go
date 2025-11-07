@@ -66,7 +66,7 @@ and automatically runs tests when changes are detected.`,
 }
 
 func init() {
-	RootCmd.Flags().StringVarP(&configPath, "config", "c", "/etc/home-ci/config.yaml", "Path to configuration file")
-	RootCmd.Flags().IntVarP(&verbose, "verbose", "v", 0, "Verbose level (0=error, 1=warn, 2=info, 3=debug)")
-	RootCmd.Flags().StringVar(&keepTime, "keep-time", "", "Keep cloned repositories for specified duration (e.g., '2h', '30m', '1h30m') before cleaning up")
+	RootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "/etc/home-ci/config.yaml", "Path to configuration file")
+	RootCmd.PersistentFlags().IntVarP(&verbose, "verbose", "v", 0, "Verbose level (0=error, 1=warn, 2=info, 3=debug)")
+	RootCmd.PersistentFlags().StringVar(&keepTime, "keep-time", "", "Keep cloned repositories for specified duration (e.g., '2h', '30m', '1h30m') before cleaning up")
 }
