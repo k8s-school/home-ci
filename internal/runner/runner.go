@@ -64,11 +64,10 @@ type TestResult struct {
 	GitHubActionsErrorMessage string        `json:"github_actions_error_message,omitempty"`
 }
 
-
 // TestRunner manages test execution and coordination
 type TestRunner struct {
 	config       config.Config
-	configPath   string        // Path to the config file for resolving relative paths
+	configPath   string // Path to the config file for resolving relative paths
 	logDir       string
 	testQueue    chan TestJob
 	ctx          context.Context
@@ -84,8 +83,8 @@ type TestExecution struct {
 	startTime      time.Time
 	logFilePath    string
 	resultFilePath string
-	workspaceDir   string  // Root workspace directory for this test
-	projectDir     string  // Project directory within workspace
+	workspaceDir   string // Root workspace directory for this test
+	projectDir     string // Project directory within workspace
 	testResult     *TestResult
 	logFile        *os.File
 }
@@ -116,7 +115,6 @@ func (tr *TestRunner) Start() {
 		}(job)
 	}
 }
-
 
 // executeTestJobWithoutSemaphore handles test execution without semaphore management
 // The semaphore is expected to be managed by the caller
@@ -356,7 +354,7 @@ func (te *TestExecution) cloneFromOrigin() error {
 		fmt.Fprintf(te.logFile, "Failed to get commit log: %v\n", err)
 	} else {
 		commitCount := 0
-		err = commitIter.ForEach(func(c *object.Commit) error {
+		_ = commitIter.ForEach(func(c *object.Commit) error {
 			commitCount++
 			if commitCount > 10 { // Stop counting after reasonable number
 				return fmt.Errorf("stop counting")

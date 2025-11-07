@@ -12,10 +12,10 @@ import (
 
 const (
 	// Git configuration
-	gitPager        = "cat"
-	gitUserName     = "CI Test"
-	gitUserEmail    = "ci-test@example.com"
-	defaultBranch   = "main"
+	gitPager      = "cat"
+	gitUserName   = "CI Test"
+	gitUserEmail  = "ci-test@example.com"
+	defaultBranch = "main"
 
 	// File permissions
 	filePerm = 0644
@@ -302,7 +302,6 @@ func (th *E2ETestHarness) createSingleCommitRepository() error {
 	}
 	return nil
 }
-
 
 // createMultiTypeTestRepository creates a repository with test commits on different branches to test all behaviors
 func (th *E2ETestHarness) createMultiTypeTestRepository() error {

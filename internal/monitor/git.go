@@ -255,4 +255,3 @@ func (gr *GitRepository) GetLatestCommitForBranch(branchName string, recentCommi
 
 	return commit, nil
 }
-

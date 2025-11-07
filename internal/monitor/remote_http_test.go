@@ -182,7 +182,7 @@ func createGitHTTPServer(t *testing.T, repoPath string) *httptest.Server {
 				w.WriteHeader(http.StatusOK)
 
 				// Add git protocol prefix
-				pktLine := fmt.Sprintf("001e# service=git-upload-pack\n0000")
+				pktLine := "001e# service=git-upload-pack\n0000"
 				w.Write([]byte(pktLine))
 				w.Write(output)
 			} else {

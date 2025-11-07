@@ -215,7 +215,6 @@ func (th *E2ETestHarness) printStatistics() {
 	}
 }
 
-
 // getExpectedResult determines expected result based on commit message only
 func (th *E2ETestHarness) getExpectedResult(commitMessage string) string {
 	// Check commit message patterns only (same logic as home-ci-diag)

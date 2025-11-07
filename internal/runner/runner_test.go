@@ -88,24 +88,24 @@ func resetTestCounters() {
 // Test du mécanisme de semaphore en isolation
 func TestSemaphoreMechanism(t *testing.T) {
 	tests := []struct {
-		name           string
-		maxConcurrent  int
-		numGoroutines  int
-		workDuration   time.Duration
+		name            string
+		maxConcurrent   int
+		numGoroutines   int
+		workDuration    time.Duration
 		expectedMaxConc int
 	}{
 		{
-			name:           "Limit 2 with 4 goroutines",
-			maxConcurrent:  2,
-			numGoroutines:  4,
-			workDuration:   100 * time.Millisecond,
+			name:            "Limit 2 with 4 goroutines",
+			maxConcurrent:   2,
+			numGoroutines:   4,
+			workDuration:    100 * time.Millisecond,
 			expectedMaxConc: 2,
 		},
 		{
-			name:           "Limit 1 with 3 goroutines should be sequential",
-			maxConcurrent:  1,
-			numGoroutines:  3,
-			workDuration:   50 * time.Millisecond,
+			name:            "Limit 1 with 3 goroutines should be sequential",
+			maxConcurrent:   1,
+			numGoroutines:   3,
+			workDuration:    50 * time.Millisecond,
 			expectedMaxConc: 1,
 		},
 	}
@@ -126,10 +126,10 @@ func TestSemaphoreMechanism(t *testing.T) {
 					defer wg.Done()
 
 					// Reproduire exactement la logique de executeTestJob
-					semaphore <- struct{}{}               // Acquire
-					defer func() { <-semaphore }()        // Release
+					semaphore <- struct{}{}        // Acquire
+					defer func() { <-semaphore }() // Release
 
-					mockTestExecution(tt.workDuration)    // Simulate work
+					mockTestExecution(tt.workDuration) // Simulate work
 				}(i)
 			}
 
@@ -314,7 +314,7 @@ func TestAnalyzeConcurrencyLogic(t *testing.T) {
 		{
 			Branch:    "concurrent/test2",
 			Commit:    "commit2",
-			StartTime: time.Date(2025, 10, 17, 15, 45, 7, 0, time.UTC),   // Démarre 7s après test1
+			StartTime: time.Date(2025, 10, 17, 15, 45, 7, 0, time.UTC),  // Démarre 7s après test1
 			EndTime:   time.Date(2025, 10, 17, 15, 45, 22, 0, time.UTC), // 15 secondes
 			Success:   true,
 		},
@@ -328,8 +328,8 @@ func TestAnalyzeConcurrencyLogic(t *testing.T) {
 		{
 			Branch:    "feature/test2",
 			Commit:    "commit4",
-			StartTime: time.Date(2025, 10, 17, 15, 45, 4, 0, time.UTC),  // Démarre pendant test1
-			EndTime:   time.Date(2025, 10, 17, 15, 45, 7, 0, time.UTC),  // 3 secondes
+			StartTime: time.Date(2025, 10, 17, 15, 45, 4, 0, time.UTC), // Démarre pendant test1
+			EndTime:   time.Date(2025, 10, 17, 15, 45, 7, 0, time.UTC), // 3 secondes
 			Success:   false,
 		},
 	}

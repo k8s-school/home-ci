@@ -17,8 +17,8 @@ type BranchState struct {
 // RunningTest is now defined in runner package
 
 type State struct {
-	BranchStates map[string]*BranchState  `json:"branch_states"`
-	RunningTests []runner.RunningTest     `json:"running_tests"`
+	BranchStates map[string]*BranchState `json:"branch_states"`
+	RunningTests []runner.RunningTest    `json:"running_tests"`
 }
 
 type StateManager struct {
