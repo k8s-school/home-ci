@@ -24,7 +24,25 @@ var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Run tests for a specific branch",
 	Long: `Manually trigger test execution for a specific git branch.
-If no commit is specified, tests will run against the latest commit of the branch.`,
+
+This command allows you to run tests on-demand for any branch in your repository.
+If no commit is specified, tests will run against the latest commit of the branch.
+
+Results and logs will be stored in the configured log directory under:
+<log-dir>/<repo-name>/tests/
+
+Examples:
+  # Run tests on the latest commit of main branch
+  home-ci run --branch main
+
+  # Run tests on a specific feature branch
+  home-ci run --branch feature/new-api
+
+  # Run tests on a specific commit
+  home-ci run --branch main --commit abc123def456
+
+  # Run with verbose output
+  home-ci run --branch main --verbose 3`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize logging
 		logging.InitLogging(verbose)
@@ -64,7 +82,7 @@ If no commit is specified, tests will run against the latest commit of the branc
 		}
 
 		fmt.Printf("Test execution completed successfully for branch '%s' at commit '%s'\n", runBranch, runCommit[:8])
-		fmt.Printf("Logs are available in: %s/%s/tests/\n", cfg.LogDir, cfg.RepoName)
+		fmt.Printf("Logs are available in: %s/%s/logs/\n", cfg.LogDir, cfg.RepoName)
 
 		return nil
 	},
@@ -105,6 +123,6 @@ func init() {
 	RootCmd.AddCommand(runCmd)
 
 	runCmd.Flags().StringVarP(&runBranch, "branch", "b", "", "Branch name to run tests against (required)")
-	runCmd.Flags().StringVarP(&runCommit, "commit", "", "", "Specific commit hash (optional, defaults to latest commit on branch)")
+	runCmd.Flags().StringVarP(&runCommit, "commit", "", "", "Specific commit hash (full SHA-1 or short form, optional)")
 	runCmd.MarkFlagRequired("branch")
 }

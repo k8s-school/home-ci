@@ -204,8 +204,8 @@ func (tr *TestRunner) newTestExecution(branch, commit string) *TestExecution {
 		branch:         branch,
 		commit:         commit,
 		startTime:      startTime,
-		logFilePath:    filepath.Join(repoLogDir, "tests", logFileName),
-		resultFilePath: filepath.Join(repoLogDir, "results", resultFileName),
+		logFilePath:    filepath.Join(repoLogDir, "logs", logFileName),
+		resultFilePath: filepath.Join(repoLogDir, "logs", resultFileName),
 		workspaceDir:   workspaceDir,
 		projectDir:     projectDir,
 		testResult: &TestResult{
@@ -253,16 +253,10 @@ func (te *TestExecution) cleanup() {
 
 // setupLogging creates and configures the log file
 func (te *TestExecution) setupLogging() error {
-	// Ensure log directory structure exists
-	logDir := filepath.Dir(te.logFilePath)
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create log directory %s: %w", logDir, err)
-	}
-
-	// Also ensure result directory exists
-	resultDir := filepath.Dir(te.resultFilePath)
-	if err := os.MkdirAll(resultDir, 0755); err != nil {
-		return fmt.Errorf("failed to create result directory %s: %w", resultDir, err)
+	// Ensure logs directory structure exists (both log and result files go in same directory now)
+	logsDir := filepath.Dir(te.logFilePath)
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create logs directory %s: %w", logsDir, err)
 	}
 
 	logFile, err := os.Create(te.logFilePath)
@@ -623,9 +617,9 @@ func (tr *TestRunner) newManualTestExecution(branch, commit string) *TestExecuti
 	// Create unique workspace ID with "run" prefix
 	workspaceID := fmt.Sprintf("run_%s_%s_%s", branchFile, commit[:8], timestamp)
 
-	// Set up paths using new directory structure with "run" prefix
-	logFileName := fmt.Sprintf("run_%s.log", workspaceID)
-	resultFileName := fmt.Sprintf("run_%s.json", workspaceID)
+	// Set up paths using new directory structure (workspaceID already has "run" prefix)
+	logFileName := fmt.Sprintf("%s.log", workspaceID)
+	resultFileName := fmt.Sprintf("%s.json", workspaceID)
 
 	// Create workspace directory in the configured workspace directory
 	workspaceDir := filepath.Join(tr.config.WorkspaceDir, workspaceID)
@@ -639,8 +633,8 @@ func (tr *TestRunner) newManualTestExecution(branch, commit string) *TestExecuti
 		branch:         branch,
 		commit:         commit,
 		startTime:      startTime,
-		logFilePath:    filepath.Join(repoLogDir, "tests", logFileName),
-		resultFilePath: filepath.Join(repoLogDir, "results", resultFileName),
+		logFilePath:    filepath.Join(repoLogDir, "logs", logFileName),
+		resultFilePath: filepath.Join(repoLogDir, "logs", resultFileName),
 		workspaceDir:   workspaceDir,
 		projectDir:     projectDir,
 		testResult: &TestResult{
