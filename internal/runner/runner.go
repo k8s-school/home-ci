@@ -77,16 +77,17 @@ type TestRunner struct {
 
 // TestExecution encapsulates a single test execution context
 type TestExecution struct {
-	runner         *TestRunner
-	branch         string
-	commit         string
-	startTime      time.Time
-	logFilePath    string
-	resultFilePath string
-	workspaceDir   string // Root workspace directory for this test
-	projectDir     string // Project directory within workspace
-	testResult     *TestResult
-	logFile        *os.File
+	runner                   *TestRunner
+	branch                   string
+	commit                   string
+	commitExplicitlySpecified bool
+	startTime                time.Time
+	logFilePath              string
+	resultFilePath           string
+	workspaceDir             string // Root workspace directory for this test
+	projectDir               string // Project directory within workspace
+	testResult               *TestResult
+	logFile                  *os.File
 }
 
 // NewTestRunner creates a new test runner instance
@@ -198,14 +199,15 @@ func (tr *TestRunner) newTestExecution(branch, commit string) *TestExecution {
 	repoLogDir := filepath.Join(tr.config.LogDir, tr.config.RepoName)
 
 	return &TestExecution{
-		runner:         tr,
-		branch:         branch,
-		commit:         commit,
-		startTime:      startTime,
-		logFilePath:    filepath.Join(repoLogDir, "logs", logFileName),
-		resultFilePath: filepath.Join(repoLogDir, "logs", resultFileName),
-		workspaceDir:   workspaceDir,
-		projectDir:     projectDir,
+		runner:                   tr,
+		branch:                   branch,
+		commit:                   commit,
+		commitExplicitlySpecified: false, // Default false for non-manual runs
+		startTime:                startTime,
+		logFilePath:              filepath.Join(repoLogDir, "logs", logFileName),
+		resultFilePath:           filepath.Join(repoLogDir, "logs", resultFileName),
+		workspaceDir:             workspaceDir,
+		projectDir:               projectDir,
 		testResult: &TestResult{
 			Branch:    branch,
 			Commit:    commit,
@@ -343,9 +345,62 @@ func (te *TestExecution) cloneFromOrigin() error {
 	currentCommit := head.Hash().String()
 	fmt.Fprintf(te.logFile, "Current HEAD commit: %s\n", currentCommit)
 
-	if currentCommit != te.commit {
-		fmt.Fprintf(te.logFile, "Warning: Expected commit %s but got %s\n", te.commit, currentCommit)
-		fmt.Fprintf(te.logFile, "This is normal if the branch has moved since detection\n")
+	// Compare commits using the shorter one's length to handle both short and full hashes
+	compareLength := len(te.commit)
+	if len(currentCommit) < compareLength {
+		compareLength = len(currentCommit)
+	}
+
+	if te.commitExplicitlySpecified {
+		// Create a local branch to avoid detached HEAD state when commit was explicitly specified
+		localBranchName := fmt.Sprintf("%s-%s", strings.ReplaceAll(te.branch, "/", "-"), te.commit[:8])
+		fmt.Fprintf(te.logFile, "Creating local branch: %s (commit was explicitly specified)\n", localBranchName)
+
+		// Get the working tree to perform checkout
+		workTree, err := repo.Worktree()
+		if err != nil {
+			fmt.Fprintf(te.logFile, "Failed to get working tree: %v\n", err)
+			return fmt.Errorf("failed to get working tree: %w", err)
+		}
+
+		if currentCommit[:compareLength] != te.commit[:compareLength] {
+			fmt.Fprintf(te.logFile, "HEAD commit %s differs from expected %s, checking out specific commit...\n", currentCommit, te.commit)
+
+			// Create and checkout a new local branch pointing to the specific commit
+			err = workTree.Checkout(&git.CheckoutOptions{
+				Hash:   plumbing.NewHash(te.commit),
+				Branch: plumbing.NewBranchReferenceName(localBranchName),
+				Create: true,
+			})
+			if err != nil {
+				fmt.Fprintf(te.logFile, "Failed to create and checkout branch %s at commit %s: %v\n", localBranchName, te.commit, err)
+				return fmt.Errorf("failed to create and checkout branch %s at commit %s: %w", localBranchName, te.commit, err)
+			}
+
+			fmt.Fprintf(te.logFile, "Successfully created and checked out branch %s at commit %s\n", localBranchName, te.commit)
+		} else {
+			fmt.Fprintf(te.logFile, "HEAD is already at the expected commit %s, creating local branch...\n", te.commit)
+
+			// Create and checkout a new local branch from current HEAD
+			err = workTree.Checkout(&git.CheckoutOptions{
+				Branch: plumbing.NewBranchReferenceName(localBranchName),
+				Create: true,
+			})
+			if err != nil {
+				fmt.Fprintf(te.logFile, "Failed to create local branch %s from HEAD: %v\n", localBranchName, err)
+				return fmt.Errorf("failed to create local branch %s from HEAD: %w", localBranchName, err)
+			}
+
+			fmt.Fprintf(te.logFile, "Successfully created local branch %s from HEAD commit %s\n", localBranchName, te.commit)
+		}
+	} else {
+		// When using latest commit (no explicit commit), just verify we're on the right commit
+		if currentCommit[:compareLength] != te.commit[:compareLength] {
+			fmt.Fprintf(te.logFile, "Warning: HEAD commit %s differs from expected latest commit %s\n", currentCommit, te.commit)
+			fmt.Fprintf(te.logFile, "This may occur if the branch moved between detection and checkout\n")
+		} else {
+			fmt.Fprintf(te.logFile, "HEAD is at the expected latest commit %s\n", te.commit)
+		}
 	}
 
 	// Verify we have the full history by checking commit count
@@ -575,11 +630,11 @@ func (tr *TestRunner) saveTestResult(result TestResult, filePath string) error {
 }
 
 // RunTestsManually executes a test manually without state management
-func (tr *TestRunner) RunTestsManually(branch, commit string) error {
+func (tr *TestRunner) RunTestsManually(branch, commit string, commitExplicitlySpecified bool) error {
 	slog.Info("Running manual test execution", "branch", branch, "commit", commit[:8], "timeout", tr.config.TestTimeout)
 
 	// Initialize manual test execution context
-	execution := tr.newManualTestExecution(branch, commit)
+	execution := tr.newManualTestExecution(branch, commit, commitExplicitlySpecified)
 	defer execution.cleanup()
 
 	// Setup logging
@@ -607,13 +662,21 @@ func (tr *TestRunner) RunTestsManually(branch, commit string) error {
 }
 
 // newManualTestExecution creates a new test execution context for manual runs
-func (tr *TestRunner) newManualTestExecution(branch, commit string) *TestExecution {
+func (tr *TestRunner) newManualTestExecution(branch, commit string, commitExplicitlySpecified bool) *TestExecution {
 	startTime := time.Now()
 	timestamp := startTime.Format("20060102-150405")
 	branchFile := strings.ReplaceAll(branch, "/", "-")
 
-	// Create unique workspace ID with "run" prefix
-	workspaceID := fmt.Sprintf("run_%s_%s_%s", branchFile, commit[:8], timestamp)
+	// Create workspace ID based on whether commit was explicitly specified
+	var workspaceID string
+	if commitExplicitlySpecified {
+		// Use local branch naming format when commit is explicitly specified
+		localBranchName := fmt.Sprintf("%s-%s", branchFile, commit[:8])
+		workspaceID = fmt.Sprintf("run_%s_%s", localBranchName, timestamp)
+	} else {
+		// Use original naming format when using latest commit
+		workspaceID = fmt.Sprintf("run_%s_%s_%s", branchFile, commit[:8], timestamp)
+	}
 
 	// Set up paths using new directory structure (workspaceID already has "run" prefix)
 	logFileName := fmt.Sprintf("%s.log", workspaceID)
@@ -627,14 +690,15 @@ func (tr *TestRunner) newManualTestExecution(branch, commit string) *TestExecuti
 	repoLogDir := filepath.Join(tr.config.LogDir, tr.config.RepoName)
 
 	return &TestExecution{
-		runner:         tr,
-		branch:         branch,
-		commit:         commit,
-		startTime:      startTime,
-		logFilePath:    filepath.Join(repoLogDir, "logs", logFileName),
-		resultFilePath: filepath.Join(repoLogDir, "logs", resultFileName),
-		workspaceDir:   workspaceDir,
-		projectDir:     projectDir,
+		runner:                   tr,
+		branch:                   branch,
+		commit:                   commit,
+		commitExplicitlySpecified: commitExplicitlySpecified, // Use the parameter value for manual runs
+		startTime:                startTime,
+		logFilePath:              filepath.Join(repoLogDir, "logs", logFileName),
+		resultFilePath:           filepath.Join(repoLogDir, "logs", resultFileName),
+		workspaceDir:             workspaceDir,
+		projectDir:               projectDir,
 		testResult: &TestResult{
 			Branch:    branch,
 			Commit:    commit,

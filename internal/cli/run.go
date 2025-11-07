@@ -59,6 +59,9 @@ Examples:
 			return fmt.Errorf("failed to load config from '%s': %w", configPath, err)
 		}
 
+		// Determine if commit was explicitly specified
+		commitExplicitlySpecified := runCommit != ""
+
 		// If no commit specified, get the latest commit from the branch
 		if runCommit == "" {
 			commit, err := getLatestCommitFromBranch(cfg.Repository, runBranch)
@@ -76,7 +79,7 @@ Examples:
 		// Execute test directly
 		fmt.Printf("Running tests for branch '%s' at commit '%s'\n", runBranch, runCommit[:8])
 
-		if err := testRunner.RunTestsManually(runBranch, runCommit); err != nil {
+		if err := testRunner.RunTestsManually(runBranch, runCommit, commitExplicitlySpecified); err != nil {
 			fmt.Printf("Test execution failed: %v\n", err)
 			return err
 		}
