@@ -204,8 +204,8 @@ func (tr *TestRunner) newTestExecution(branch, commit string) *TestExecution {
 		commit:                   commit,
 		commitExplicitlySpecified: false, // Default false for non-manual runs
 		startTime:                startTime,
-		logFilePath:              filepath.Join(repoLogDir, "logs", logFileName),
-		resultFilePath:           filepath.Join(repoLogDir, "logs", resultFileName),
+		logFilePath:              filepath.Join(repoLogDir, logFileName),
+		resultFilePath:           filepath.Join(repoLogDir, resultFileName),
 		workspaceDir:             workspaceDir,
 		projectDir:               projectDir,
 		testResult: &TestResult{
@@ -695,8 +695,8 @@ func (tr *TestRunner) newManualTestExecution(branch, commit string, commitExplic
 		commit:                   commit,
 		commitExplicitlySpecified: commitExplicitlySpecified, // Use the parameter value for manual runs
 		startTime:                startTime,
-		logFilePath:              filepath.Join(repoLogDir, "logs", logFileName),
-		resultFilePath:           filepath.Join(repoLogDir, "logs", resultFileName),
+		logFilePath:              filepath.Join(repoLogDir, logFileName),
+		resultFilePath:           filepath.Join(repoLogDir, resultFileName),
 		workspaceDir:             workspaceDir,
 		projectDir:               projectDir,
 		testResult: &TestResult{

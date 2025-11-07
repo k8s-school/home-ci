@@ -97,8 +97,8 @@ func (th *E2ETestHarness) checkStateForTimeout() error {
 		return nil // Already detected
 	}
 
-	// Check JSON result files for timeout indication in unified architecture location
-	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "logs")
+	// Check JSON result files for timeout indication in simplified architecture location
+	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName)
 	files, err := os.ReadDir(resultsDir)
 	if err != nil {
 		// Fallback to old location

@@ -85,7 +85,7 @@ Examples:
 		}
 
 		fmt.Printf("Test execution completed successfully for branch '%s' at commit '%s'\n", runBranch, runCommit[:8])
-		fmt.Printf("Logs are available in: %s/%s/logs/\n", cfg.LogDir, cfg.RepoName)
+		fmt.Printf("Logs are available in: %s/%s/\n", cfg.LogDir, cfg.RepoName)
 
 		return nil
 	},

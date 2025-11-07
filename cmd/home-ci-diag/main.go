@@ -153,7 +153,7 @@ func showBranchesWithTestResults(repoPath string) {
 			config, err := readConfig(configPath)
 			logPath := result.LogFile // fallback to just filename
 			if err == nil && config.LogDir != "" && config.RepoName != "" {
-				logPath = filepath.Join(config.LogDir, config.RepoName, "logs", result.LogFile)
+				logPath = filepath.Join(config.LogDir, config.RepoName, result.LogFile)
 			}
 
 			duration := result.EndTime.Sub(result.StartTime)
@@ -371,8 +371,8 @@ func readTestResults(repoPath string) ([]TestResult, error) {
 		return readTestResultsOld(repoPath)
 	}
 
-	// Use unified architecture location: log_dir/repo_name/logs/
-	resultsDir := filepath.Join(config.LogDir, config.RepoName, "logs")
+	// Use simplified architecture location: log_dir/repo_name/
+	resultsDir := filepath.Join(config.LogDir, config.RepoName)
 	files, err := filepath.Glob(filepath.Join(resultsDir, "*.json"))
 	if err != nil {
 		// If new location fails, try fallback

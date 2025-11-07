@@ -395,8 +395,8 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 
 // countTestsFromResults counts the number of tests by counting JSON result files
 func (th *E2ETestHarness) countTestsFromResults() int {
-	// Check test results in logs/repo-name/logs directory (unified architecture)
-	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "logs")
+	// Check test results in logs/repo-name directory (simplified architecture)
+	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName)
 	if files, err := os.ReadDir(resultsDir); err == nil {
 		count := 0
 		for _, file := range files {
@@ -544,8 +544,8 @@ func (th *E2ETestHarness) analyzeTestResults() bool {
 	log.Println("")
 	log.Println("=== Test Results Analysis ===")
 
-	// Read the home-ci test results from unified architecture location
-	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "logs")
+	// Read the home-ci test results from simplified architecture location
+	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName)
 	files, err := os.ReadDir(resultsDir)
 	if err != nil {
 		// Fallback to old location
