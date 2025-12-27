@@ -1,6 +1,6 @@
 # Repository configuration
-repository: "https://github.com/k8s-school/ktbx.git"
-repo_name: "ktbx"
+repository: "https://github.com/astrolabsoftware/fink-broker.git"
+repo_name: "fink-broker"
 
 # Optional: override default directories (will use /tmp fallbacks for development)
 # cache_dir: "/var/cache/home-ci"
@@ -15,6 +15,7 @@ log_dir: "/tmp/home-ci/log"
 # Test configuration
 check_interval: 30s
 test_script: "e2e/run.sh"
+options: "-c -s"
 recent_commits_within: 240h
 test_timeout: 60m
 fetch_remote: true
@@ -29,6 +30,6 @@ cleanup:
 github_actions_dispatch:
   enabled: true
   github_repo: "astrolabsoftware/fink-broker"
-  github_token_file: "/home/fjammes/src/github.com/k8s-school/ktbx/secret.yaml"
-  dispatch_type: "test-dispatch-with-artifacts"
+  github_token_file: "/home/fink-ci/secret.yaml"
+  dispatch_type: "test-home-ci-no-token"
 
