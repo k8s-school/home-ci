@@ -193,7 +193,7 @@ test-continuous-ci: build
 
 test-uat-github-repo-default: build
 	@echo "🧪 Running UAT: GitHub repository auto-defaulting test..."
-	./tests/uat/test-github-repo-default.sh
+	./tests/uat/test-github-repo-ktbx.sh
 	@echo ""
 
 # Clean build artifacts

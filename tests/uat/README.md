@@ -7,7 +7,7 @@ This directory contains User Acceptance Tests that validate end-to-end functiona
 ```
 tests/uat/
 ├── README.md                      # This documentation
-├── test-github-repo-default.sh    # UAT for GitHub repo auto-defaulting
+├── test-github-repo-ktbx.sh       # UAT for GitHub repo auto-defaulting using ktbx
 └── ktbx.yaml                      # Real ktbx.yaml configuration (copy of examples/ktbx.yaml)
 ```
 
@@ -15,7 +15,7 @@ tests/uat/
 
 ### GitHub Repository Auto-Defaulting UAT
 
-**File:** `test-github-repo-default.sh`
+**File:** `test-github-repo-ktbx.sh`
 **Config:** `ktbx.yaml` (copy of `examples/ktbx.yaml` without explicit `github_repo`)
 
 **Purpose:** Validates that `github_actions_dispatch.github_repo` automatically defaults to the repository value when not explicitly set.
@@ -38,7 +38,7 @@ tests/uat/
 make test-uat-github-repo-default
 
 # Or directly
-./tests/uat/test-github-repo-default.sh
+./tests/uat/test-github-repo-ktbx.sh
 ```
 
 **Note:** This test will fail if:
@@ -72,9 +72,13 @@ These UAT tests are designed to:
 
 When adding new UAT tests:
 
-1. Create a descriptive test script: `test-{feature-name}.sh`
-2. Add corresponding configuration file: `{feature-name}.yaml`
+1. Create a descriptive test script: `test-{feature-name}-{project}.sh`
+2. Add corresponding configuration file: `{project}.yaml`
 3. Update this README with test description
 4. Add make target in root Makefile
 5. Add GitHub Actions job in `.github/workflows/e2e.yaml`
 6. Ensure proper cleanup and error handling
+
+Example naming convention:
+- `test-github-repo-ktbx.sh` - Tests GitHub repo defaulting with ktbx project
+- `test-timeout-fink.sh` - Tests timeout handling with fink project

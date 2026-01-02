@@ -502,9 +502,9 @@ jobs:
     - name: Make binaries executable
       run: |
         chmod +x home-ci
-        chmod +x tests/uat/test-github-repo-default.sh
+        chmod +x tests/uat/test-github-repo-ktbx.sh
 
     - name: Run GitHub repo auto-defaulting UAT
       env:
         HOME_CI_BINARY: ./home-ci
-      run: ./tests/uat/test-github-repo-default.sh
+      run: ./tests/uat/test-github-repo-ktbx.sh
