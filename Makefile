@@ -1,4 +1,4 @@
-.PHONY: build build-e2e build-diag install test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-no-token-file test-dispatch-all test-quick test-normal test-long test-concurrent-limit test-continuous-ci copy-secret-if-exists clean clean-all help
+.PHONY: build build-e2e build-diag install test test-success test-fail test-timeout test-dispatch-one-success test-dispatch-no-token-file test-dispatch-all test-quick test-normal test-long test-concurrent-limit test-continuous-ci test-uat-github-repo-default copy-secret-if-exists clean clean-all help
 
 # Default target
 help:
@@ -26,6 +26,7 @@ help:
 	@echo "  test-long           Run extended integration tests (10 minutes)"
 	@echo "  test-concurrent-limit Test max_concurrent_runs=2 with 4 branches"
 	@echo "  test-continuous-ci  Test continuous integration with max_concurrent_runs=3"
+	@echo "  test-uat-github-repo-default UAT test for GitHub repo auto-defaulting"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make build && make test"
@@ -189,11 +190,11 @@ test-continuous-ci: build
 	@echo "🔄 Running continuous integration test (max_concurrent_runs=3)..."
 	./home-ci-e2e -v3 --type=continuous-ci
 	@echo ""
-	@echo "🔍 Verifying workflow consistency:"
-	./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-timeline
+
+test-uat-github-repo-default: build
+	@echo "🧪 Running UAT: GitHub repository auto-defaulting test..."
+	./tests/uat/test-github-repo-default.sh
 	@echo ""
-	@echo "🔍 Verifying concurrency compliance:"
-	./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-concurrency
 
 # Clean build artifacts
 clean:

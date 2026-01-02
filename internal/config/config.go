@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -110,6 +111,11 @@ func (c *Config) Normalize() error {
 		}
 	}
 
+	// Set default github_repo from repository if not explicitly set
+	if c.GitHubActionsDispatch.GitHubRepo == "" && c.Repository != "" {
+		c.GitHubActionsDispatch.GitHubRepo = extractGitHubRepoFormat(c.Repository)
+	}
+
 	// For development/testing, fall back to local directories if standard paths don't exist
 	if !isDirWritable(c.CacheDir) {
 		c.CacheDir = filepath.Join(os.TempDir(), "home-ci", "cache")
@@ -142,6 +148,68 @@ func extractRepoName(repoPath string) string {
 	}
 
 	return name
+}
+
+// extractGitHubRepoFormat extracts the GitHub owner/repo format from a Git URL or local path
+func extractGitHubRepoFormat(repoPath string) string {
+	// Handle various Git URL formats:
+	// https://github.com/owner/repo.git -> owner/repo
+	// git@github.com:owner/repo.git -> owner/repo
+	// For local paths (like "."), try to get GitHub URL from git remote
+	// For non-GitHub URLs, return empty string
+
+	// If it's empty, return empty
+	if repoPath == "" {
+		return ""
+	}
+
+	// If it's a local path (like "." or relative/absolute paths without protocol),
+	// try to get the remote URL from git
+	if !strings.Contains(repoPath, "://") && !strings.Contains(repoPath, "@") {
+		if gitRemoteURL := getGitRemoteURL(repoPath); gitRemoteURL != "" {
+			return extractGitHubRepoFormat(gitRemoteURL)
+		}
+		return ""
+	}
+
+	// Normalize the path
+	path := strings.TrimSuffix(repoPath, ".git")
+	path = strings.TrimSuffix(path, "/")
+
+	// Handle SSH format: git@github.com:owner/repo
+	if strings.Contains(path, "git@github.com:") {
+		parts := strings.Split(path, ":")
+		if len(parts) >= 2 {
+			return parts[1]
+		}
+	}
+
+	// Handle HTTPS format: https://github.com/owner/repo
+	if strings.Contains(path, "github.com/") {
+		parts := strings.Split(path, "github.com/")
+		if len(parts) >= 2 {
+			return parts[1]
+		}
+	}
+
+	// Return empty string for non-GitHub repositories
+	return ""
+}
+
+// getGitRemoteURL tries to get the origin remote URL for a local git repository
+func getGitRemoteURL(repoPath string) string {
+	// Try to get the remote URL using git command
+	cmd := exec.Command("git", "remote", "get-url", "origin")
+	if repoPath != "" && repoPath != "." {
+		cmd.Dir = repoPath
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(output))
 }
 
 // isDirWritable checks if a directory exists and is writable, or if parent exists and is writable

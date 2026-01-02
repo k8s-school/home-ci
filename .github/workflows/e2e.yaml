@@ -486,3 +486,25 @@ jobs:
 
     - name: Verify concurrency compliance
       run: ./home-ci-diag --config=/tmp/home-ci/e2e/continuous-ci/config-continuous-ci.yaml --check-concurrency
+
+  test-github-repo-default:
+    runs-on: ubuntu-latest
+    needs: build
+    continue-on-error: true  # Optional test that may fail without real token
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download home-ci binary
+      uses: actions/download-artifact@v4
+      with:
+        name: home-ci-binary
+
+    - name: Make binaries executable
+      run: |
+        chmod +x home-ci
+        chmod +x tests/uat/test-github-repo-default.sh
+
+    - name: Run GitHub repo auto-defaulting UAT
+      env:
+        HOME_CI_BINARY: ./home-ci
+      run: ./tests/uat/test-github-repo-default.sh
