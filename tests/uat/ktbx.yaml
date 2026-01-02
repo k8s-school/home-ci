@@ -29,5 +29,5 @@ cleanup:
 github_actions_dispatch:
   enabled: true
   github_token_file: "/home/fjammes/src/github.com/k8s-school/ktbx/secret.yaml"
-  dispatch_type: "test-dispatch-with-artifacts"
+  dispatch_type: "dispatch-with-artifacts"
 
