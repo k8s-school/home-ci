@@ -109,15 +109,25 @@ else
     exit 1
 fi
 
-# Test 5: Check GitHub API response (success or expected permission failure)
-if grep -q "GitHub Actions notification failed.*status 403.*Resource not accessible" "$LOG_FILE"; then
-    echo -e "${GREEN}✅ SUCCESS: GitHub API called with real token (403 = insufficient permissions)${NC}"
-elif grep -q "GitHub Actions notification failed.*status 401.*Bad credentials" "$LOG_FILE"; then
-    echo -e "${YELLOW}⚠️  WARNING: Token authentication failed (401 = bad credentials)${NC}"
-elif grep -q "github_actions_success.*true" "$LOG_FILE"; then
+# Test 5: Check GitHub API response (must succeed for UAT to pass)
+if grep -q "github_actions_success.*true" "$LOG_FILE" || grep -q "GitHub Actions dispatch completed successfully" "$LOG_FILE"; then
     echo -e "${GREEN}✅ SUCCESS: GitHub Actions dispatch completed successfully!${NC}"
+elif grep -q "GitHub Actions notification failed.*status 401.*Bad credentials" "$LOG_FILE"; then
+    echo -e "${RED}❌ FAIL: Token authentication failed (401 = bad credentials)${NC}"
+    echo -e "${RED}This UAT requires a valid GitHub token with proper permissions.${NC}"
+    exit 1
+elif grep -q "GitHub Actions notification failed.*status 403.*Resource not accessible" "$LOG_FILE"; then
+    echo -e "${RED}❌ FAIL: GitHub token has insufficient permissions (403)${NC}"
+    echo -e "${RED}Token needs 'repo' scope or 'public_repo' for repository dispatch.${NC}"
+    exit 1
+elif grep -q "GitHub Actions notification failed" "$LOG_FILE"; then
+    echo -e "${RED}❌ FAIL: GitHub Actions dispatch failed${NC}"
+    grep "GitHub Actions notification failed" "$LOG_FILE"
+    exit 1
 else
-    echo -e "${YELLOW}⚠️  INFO: GitHub API response unclear, but dispatch was attempted${NC}"
+    echo -e "${RED}❌ FAIL: GitHub Actions dispatch was not attempted or completed${NC}"
+    echo "Expected successful dispatch for UAT validation."
+    exit 1
 fi
 
 # Test 6: Verify the test actually ran (not just dispatch)

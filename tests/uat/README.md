@@ -28,6 +28,7 @@ tests/uat/
 
 **Prerequisites:**
 - Real GitHub token file must exist at: `/home/fjammes/src/github.com/k8s-school/ktbx/secret.yaml`
+- GitHub token must have `repo` scope (or `public_repo` for public repositories) for repository dispatch
 - ktbx project must be available
 - `kind` must be installed for Kubernetes testing
 
@@ -40,7 +41,12 @@ make test-uat-github-repo-default
 ./tests/uat/test-github-repo-default.sh
 ```
 
-**Note:** This test will fail if the real GitHub token is not available. This is intentional to ensure UAT tests use real credentials and provide accurate validation.
+**Note:** This test will fail if:
+- The real GitHub token is not available
+- The GitHub token has insufficient permissions (401/403 errors)
+- GitHub Actions dispatch fails for any reason
+
+This strict validation ensures UAT tests provide accurate end-to-end validation of the GitHub Actions integration.
 
 **Expected behavior:**
 The test uses the real `examples/ktbx.yaml` configuration but with `github_repo` deliberately omitted (removed from the copy). The system should automatically extract `k8s-school/ktbx` from the repository URL `https://github.com/k8s-school/ktbx.git` and use it for GitHub Actions dispatch.
