@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -162,6 +163,43 @@ func parseRepoString(repoString string) (owner, name string, err error) {
 	return parts[0], parts[1], nil
 }
 
+// findLatestYAMLReportFile looks for the most recent YAML e2e report file in the log directory
+func findLatestYAMLReportFile(logDir string) string {
+	// Pattern matches files like: 20260108-110938-e2e-report.yaml
+	yamlPattern := regexp.MustCompile(`^(\d{8}-\d{6})-e2e-report\.yaml$`)
+
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		slog.Debug("Failed to read log directory for YAML reports", "dir", logDir, "error", err)
+		return ""
+	}
+
+	var latestFile string
+	var latestTimestamp string
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		fileName := entry.Name()
+		matches := yamlPattern.FindStringSubmatch(fileName)
+		if len(matches) > 1 {
+			timestamp := matches[1]
+			if timestamp > latestTimestamp {
+				latestTimestamp = timestamp
+				latestFile = filepath.Join(logDir, fileName)
+			}
+		}
+	}
+
+	if latestFile != "" {
+		slog.Debug("Found latest YAML e2e report file", "file", latestFile)
+	}
+
+	return latestFile
+}
+
 // createArtifactsMap creates the artifacts map for the dispatch payload
 func createArtifactsMap(branch, commit string, success bool, logFilePath, resultFilePath string) map[string]interface{} {
 	artifacts := make(map[string]interface{})
@@ -191,6 +229,24 @@ func createArtifactsMap(branch, commit string, success bool, logFilePath, result
 			slog.Debug("Added result file to dispatch payload", "file", fileName, "size", len(content))
 		} else {
 			slog.Debug("Failed to read result file for dispatch", "file", resultFilePath, "error", err)
+		}
+	}
+
+	// Look for the latest YAML report file in the log directory
+	if logFilePath != "" {
+		logDir := filepath.Dir(logFilePath)
+		yamlReportFile := findLatestYAMLReportFile(logDir)
+		if yamlReportFile != "" {
+			if content, err := readFileAsBase64(yamlReportFile); err == nil {
+				fileName := filepath.Base(yamlReportFile)
+				artifacts[fileName] = Artifact{
+					Content: content,
+					Type:    "e2e-report",
+				}
+				slog.Debug("Added YAML report file to dispatch payload", "file", fileName, "size", len(content))
+			} else {
+				slog.Debug("Failed to read YAML report file for dispatch", "file", yamlReportFile, "error", err)
+			}
 		}
 	}
 
