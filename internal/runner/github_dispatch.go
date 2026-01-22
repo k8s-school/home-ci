@@ -123,14 +123,32 @@ func (gc *GitHubClient) SendDispatch(repoOwner, repoName, eventType string, clie
 
 	gc.setHeaders(req)
 
+	// Log detailed request information
+	slog.Debug("GitHub API request details",
+		"method", req.Method,
+		"url", req.URL.String(),
+		"payload", string(jsonData),
+		"headers", map[string]string{
+			"Accept": req.Header.Get("Accept"),
+			"Authorization": "Bearer ***", // Mask the token
+			"X-GitHub-Api-Version": req.Header.Get("X-GitHub-Api-Version"),
+			"Content-Type": req.Header.Get("Content-Type"),
+		})
+
 	resp, err := gc.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// Log response details
+	slog.Debug("GitHub API response details",
+		"status_code", resp.StatusCode,
+		"status", resp.Status)
+
 	if resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
+		slog.Debug("GitHub API error response", "body", string(body))
 		return fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -328,13 +346,14 @@ func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool, l
 	// Create payload
 	clientPayload := createClientPayload(branch, commit, success, logFilePath, resultFilePath)
 
-	// Log dispatch attempt
+	// Log dispatch attempt with request details
 	slog.Debug("Sending GitHub Actions dispatch",
 		"repo", config.GitHubRepo,
 		"event_type", eventType,
 		"branch", branch,
 		"commit", commit[:8],
-		"success", success)
+		"success", success,
+		"payload", clientPayload)
 
 	// Send dispatch
 	if err := client.SendDispatch(repoOwner, repoName, eventType, clientPayload); err != nil {

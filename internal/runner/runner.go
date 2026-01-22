@@ -173,6 +173,7 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 
 	// Post-execution tasks
 	execution.runCleanupIfNeeded()
+	execution.saveTestResultForDispatch()
 	execution.sendGitHubNotificationIfNeeded()
 
 	return nil
@@ -219,10 +220,9 @@ func (tr *TestRunner) newTestExecution(branch, commit string) *TestExecution {
 
 // cleanup handles final cleanup tasks for test execution
 func (te *TestExecution) cleanup() {
-	// Finalize test result
+	// Finalize test result timing (test result is already saved before dispatch)
 	te.testResult.EndTime = time.Now()
 	te.testResult.Duration = te.testResult.EndTime.Sub(te.testResult.StartTime)
-	te.saveTestResult()
 
 	// Close log file if open
 	if te.logFile != nil {
@@ -589,6 +589,20 @@ func (te *TestExecution) logCleanupFailure(err error) {
 	fmt.Fprintf(te.logFile, "============================\n")
 }
 
+// saveTestResultForDispatch saves the test result before sending GitHub dispatch
+func (te *TestExecution) saveTestResultForDispatch() {
+	// Finalize test result timing (test is complete, calculate duration before dispatch)
+	te.testResult.EndTime = time.Now()
+	te.testResult.Duration = te.testResult.EndTime.Sub(te.testResult.StartTime)
+
+	// Save the result file so it's available for the GitHub dispatch
+	if err := te.runner.saveTestResult(*te.testResult, te.resultFilePath); err != nil {
+		slog.Error("Failed to save test result for dispatch", "error", err, "file", te.resultFilePath)
+	} else {
+		slog.Debug("Test result saved for dispatch", "file", te.resultFilePath)
+	}
+}
+
 // sendGitHubNotificationIfNeeded sends GitHub Actions notification if enabled
 func (te *TestExecution) sendGitHubNotificationIfNeeded() {
 	if !te.runner.config.GitHubActionsDispatch.Enabled {
@@ -655,6 +669,7 @@ func (tr *TestRunner) RunTestsManually(branch, commit string, commitExplicitlySp
 
 	// Post-execution tasks
 	execution.runCleanupIfNeeded()
+	execution.saveTestResultForDispatch()
 	execution.sendGitHubNotificationIfNeeded()
 
 	slog.Info("Manual test execution completed", "branch", branch, "commit", commit[:8], "success", execution.testResult.Success)
