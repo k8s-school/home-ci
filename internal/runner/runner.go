@@ -16,6 +16,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/k8s-school/home-ci/internal/config"
+	"github.com/k8s-school/home-ci/internal/utils"
 )
 
 // StateManager interface to avoid circular imports
@@ -120,7 +121,7 @@ func (tr *TestRunner) Start() {
 // executeTestJobWithoutSemaphore handles test execution without semaphore management
 // The semaphore is expected to be managed by the caller
 func (tr *TestRunner) executeTestJobWithoutSemaphore(job TestJob) {
-	slog.Debug("Starting tests", "branch", job.Branch, "commit", job.Commit[:8])
+	slog.Debug("Starting tests", "branch", job.Branch, "commit", utils.ShortCommit(job.Commit))
 
 	if err := tr.runTests(job.Branch, job.Commit); err != nil {
 		slog.Debug("Tests failed", "branch", job.Branch, "error", err)
@@ -146,7 +147,7 @@ func (tr *TestRunner) Close() {
 
 // runTests orchestrates the execution of a single test
 func (tr *TestRunner) runTests(branch, commit string) error {
-	slog.Debug("Running tests", "branch", branch, "commit", commit[:8], "timeout", tr.config.TestTimeout)
+	slog.Debug("Running tests", "branch", branch, "commit", utils.ShortCommit(commit), "timeout", tr.config.TestTimeout)
 
 	// Initialize test execution context
 	execution := tr.newTestExecution(branch, commit)
@@ -182,22 +183,15 @@ func (tr *TestRunner) runTests(branch, commit string) error {
 // newTestExecution creates a new test execution context
 func (tr *TestRunner) newTestExecution(branch, commit string) *TestExecution {
 	startTime := time.Now()
-	timestamp := startTime.Format("20060102-150405")
-	branchFile := strings.ReplaceAll(branch, "/", "-")
 
-	// Create unique workspace ID
-	workspaceID := fmt.Sprintf("%s_%s_%s", branchFile, commit[:8], timestamp)
+	// Use new config methods for path calculation
+	workspaceDir := tr.config.GetWorkspaceDir(branch, commit)
+	projectDir := tr.config.GetProjectDir(branch, commit)
+	logsDir := tr.config.GetLogsDir(branch, commit)
 
-	// Set up paths using new directory structure
-	logFileName := fmt.Sprintf("%s.log", workspaceID)
-	resultFileName := fmt.Sprintf("%s.json", workspaceID)
-
-	// Create workspace directory in the configured workspace directory
-	workspaceDir := filepath.Join(tr.config.WorkspaceDir, workspaceID)
-	projectDir := filepath.Join(workspaceDir, tr.config.RepoName)
-
-	// Create log directory for this repository if it doesn't exist
-	repoLogDir := filepath.Join(tr.config.LogDir, tr.config.RepoName)
+	// Simple log file names
+	logFileName := "run.log"
+	resultFileName := "run.json"
 
 	return &TestExecution{
 		runner:                   tr,
@@ -205,8 +199,8 @@ func (tr *TestRunner) newTestExecution(branch, commit string) *TestExecution {
 		commit:                   commit,
 		commitExplicitlySpecified: false, // Default false for non-manual runs
 		startTime:                startTime,
-		logFilePath:              filepath.Join(repoLogDir, logFileName),
-		resultFilePath:           filepath.Join(repoLogDir, resultFileName),
+		logFilePath:              filepath.Join(logsDir, logFileName),
+		resultFilePath:           filepath.Join(logsDir, resultFileName),
 		workspaceDir:             workspaceDir,
 		projectDir:               projectDir,
 		testResult: &TestResult{
@@ -353,7 +347,7 @@ func (te *TestExecution) cloneFromOrigin() error {
 
 	if te.commitExplicitlySpecified {
 		// Create a local branch to avoid detached HEAD state when commit was explicitly specified
-		localBranchName := fmt.Sprintf("%s-%s", strings.ReplaceAll(te.branch, "/", "-"), te.commit[:8])
+		localBranchName := fmt.Sprintf("%s-%s", strings.ReplaceAll(te.branch, "/", "-"), utils.ShortCommit(te.commit))
 		fmt.Fprintf(te.logFile, "Creating local branch: %s (commit was explicitly specified)\n", localBranchName)
 
 		// Get the working tree to perform checkout
@@ -427,7 +421,7 @@ func (te *TestExecution) cloneFromOrigin() error {
 	slog.Debug("Repository workspace setup completed from origin using go-git",
 		"repo", te.runner.config.RepoName,
 		"branch", te.branch,
-		"commit", te.commit[:8],
+		"commit", utils.ShortCommit(te.commit),
 		"workspace", te.workspaceDir)
 
 	return nil
@@ -453,6 +447,13 @@ func (te *TestExecution) executeTest() error {
 	cmd.Dir = te.projectDir
 	cmd.Stdout = io.MultiWriter(os.Stdout, te.logFile)
 	cmd.Stderr = io.MultiWriter(os.Stderr, te.logFile)
+
+	// Set up environment variables for the test script
+	logsDir := te.runner.config.GetLogsDir(te.branch, te.commit)
+	// Create a timestamped result file name for better organization
+	timestamp := time.Now().Format("20060102-150405")
+	resultFile := filepath.Join(logsDir, fmt.Sprintf("%s-e2e-report.yaml", timestamp))
+	cmd.Env = append(os.Environ(), fmt.Sprintf("HOME_CI_RESULT_FILE=%s", resultFile))
 
 	// Log test execution
 	te.logTestExecution(scriptPath, args)
@@ -513,7 +514,7 @@ func (te *TestExecution) handleTestTimeout(duration time.Duration) {
 
 	slog.Error("Test timeout",
 		"branch", te.branch,
-		"commit", te.commit[:8],
+		"commit", utils.ShortCommit(te.commit),
 		"duration", duration,
 		"timeout", te.runner.config.TestTimeout)
 
@@ -645,7 +646,7 @@ func (tr *TestRunner) saveTestResult(result TestResult, filePath string) error {
 
 // RunTestsManually executes a test manually without state management
 func (tr *TestRunner) RunTestsManually(branch, commit string, commitExplicitlySpecified bool) error {
-	slog.Info("Running manual test execution", "branch", branch, "commit", commit[:8], "timeout", tr.config.TestTimeout)
+	slog.Info("Running manual test execution", "branch", branch, "commit", utils.ShortCommit(commit), "timeout", tr.config.TestTimeout)
 
 	// Initialize manual test execution context
 	execution := tr.newManualTestExecution(branch, commit, commitExplicitlySpecified)
@@ -672,37 +673,22 @@ func (tr *TestRunner) RunTestsManually(branch, commit string, commitExplicitlySp
 	execution.saveTestResultForDispatch()
 	execution.sendGitHubNotificationIfNeeded()
 
-	slog.Info("Manual test execution completed", "branch", branch, "commit", commit[:8], "success", execution.testResult.Success)
+	slog.Info("Manual test execution completed", "branch", branch, "commit", utils.ShortCommit(commit), "success", execution.testResult.Success)
 	return nil
 }
 
 // newManualTestExecution creates a new test execution context for manual runs
 func (tr *TestRunner) newManualTestExecution(branch, commit string, commitExplicitlySpecified bool) *TestExecution {
 	startTime := time.Now()
-	timestamp := startTime.Format("20060102-150405")
-	branchFile := strings.ReplaceAll(branch, "/", "-")
 
-	// Create workspace ID based on whether commit was explicitly specified
-	var workspaceID string
-	if commitExplicitlySpecified {
-		// Use local branch naming format when commit is explicitly specified
-		localBranchName := fmt.Sprintf("%s-%s", branchFile, commit[:8])
-		workspaceID = fmt.Sprintf("run_%s_%s", localBranchName, timestamp)
-	} else {
-		// Use original naming format when using latest commit
-		workspaceID = fmt.Sprintf("run_%s_%s_%s", branchFile, commit[:8], timestamp)
-	}
+	// Use new config methods for path calculation
+	workspaceDir := tr.config.GetWorkspaceDir(branch, commit)
+	projectDir := tr.config.GetProjectDir(branch, commit)
+	logsDir := tr.config.GetLogsDir(branch, commit)
 
-	// Set up paths using new directory structure (workspaceID already has "run" prefix)
-	logFileName := fmt.Sprintf("%s.log", workspaceID)
-	resultFileName := fmt.Sprintf("%s.json", workspaceID)
-
-	// Create workspace directory in the configured workspace directory
-	workspaceDir := filepath.Join(tr.config.WorkspaceDir, workspaceID)
-	projectDir := filepath.Join(workspaceDir, tr.config.RepoName)
-
-	// Create log directory for this repository if it doesn't exist
-	repoLogDir := filepath.Join(tr.config.LogDir, tr.config.RepoName)
+	// Simple log file names
+	logFileName := "run.log"
+	resultFileName := "run.json"
 
 	return &TestExecution{
 		runner:                   tr,
@@ -710,8 +696,8 @@ func (tr *TestRunner) newManualTestExecution(branch, commit string, commitExplic
 		commit:                   commit,
 		commitExplicitlySpecified: commitExplicitlySpecified, // Use the parameter value for manual runs
 		startTime:                startTime,
-		logFilePath:              filepath.Join(repoLogDir, logFileName),
-		resultFilePath:           filepath.Join(repoLogDir, resultFileName),
+		logFilePath:              filepath.Join(logsDir, logFileName),
+		resultFilePath:           filepath.Join(logsDir, resultFileName),
 		workspaceDir:             workspaceDir,
 		projectDir:               projectDir,
 		testResult: &TestResult{

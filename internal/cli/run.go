@@ -13,6 +13,7 @@ import (
 	"github.com/k8s-school/home-ci/internal/config"
 	"github.com/k8s-school/home-ci/internal/logging"
 	"github.com/k8s-school/home-ci/internal/runner"
+	"github.com/k8s-school/home-ci/internal/utils"
 )
 
 var (
@@ -69,23 +70,28 @@ Examples:
 				return fmt.Errorf("failed to get latest commit for branch %s: %w", runBranch, err)
 			}
 			runCommit = commit
-			fmt.Printf("Using latest commit from branch %s: %s\n", runBranch, runCommit[:8])
+			fmt.Printf("Using latest commit from branch %s: %s\n", runBranch, utils.ShortCommit(runCommit))
 		}
 
 		// Create test runner without state manager for manual execution
 		ctx := context.Background()
-		testRunner := runner.NewTestRunner(cfg, configPath, cfg.LogDir, ctx, nil)
+		testRunner := runner.NewTestRunner(cfg, configPath, cfg.WorkDir, ctx, nil)
 
 		// Execute test directly
-		fmt.Printf("Running tests for branch '%s' at commit '%s'\n", runBranch, runCommit[:8])
+		// Handle short commits safely
+		shortCommit := runCommit
+		if len(runCommit) > 8 {
+			shortCommit = runCommit[:8]
+		}
+		fmt.Printf("Running tests for branch '%s' at commit '%s'\n", runBranch, shortCommit)
 
 		if err := testRunner.RunTestsManually(runBranch, runCommit, commitExplicitlySpecified); err != nil {
 			fmt.Printf("Test execution failed: %v\n", err)
 			return err
 		}
 
-		fmt.Printf("Test execution completed successfully for branch '%s' at commit '%s'\n", runBranch, runCommit[:8])
-		fmt.Printf("Logs are available in: %s/%s/\n", cfg.LogDir, cfg.RepoName)
+		fmt.Printf("Test execution completed successfully for branch '%s' at commit '%s'\n", runBranch, utils.ShortCommit(runCommit))
+		fmt.Printf("Logs are available in: %s/%s/\n", cfg.WorkDir, cfg.RepoName)
 
 		return nil
 	},

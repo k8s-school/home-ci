@@ -69,7 +69,7 @@ install: build-home-ci build-diag
 # Run integration tests (default duration)
 test: build
 	@echo "🧪 Running integration tests..."
-	./home-ci-e2e -v3 --type=normal -duration=3m
+	./home-ci-e2e -v3 --type=normal --duration=3m
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/normal/config-normal.yaml --check-timeline
@@ -166,7 +166,7 @@ test-normal: build
 # Run extended tests
 test-long: build
 	@echo "🐌 Running extended integration tests..."
-	./home-ci-e2e -v3 --type=long -duration=5m
+	./home-ci-e2e -v3 --type=long --duration=5m
 	@echo ""
 	@echo "🔍 Verifying workflow consistency:"
 	./home-ci-diag --config=/tmp/home-ci/e2e/long/config-long.yaml --check-timeline

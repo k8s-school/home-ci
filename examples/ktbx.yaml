@@ -2,19 +2,13 @@
 repository: "https://github.com/k8s-school/ktbx.git"
 repo_name: "ktbx"
 
-# Optional: override default directories (will use /tmp fallbacks for development)
-# cache_dir: "/var/cache/home-ci"
-# state_dir: "/var/lib/home-ci/state"
-# workspace_dir: "/var/lib/home-ci/workspaces"
-# log_dir: "/var/log/home-ci"
-cache_dir: "/tmp/home-ci/cache"
-state_dir: "/tmp/home-ci/state"
-workspace_dir: "/tmp/home-ci/workspaces"
-log_dir: "/tmp/home-ci/log"
+# Working directory - all subdirectories calculated from this base path
+work_dir: "/tmp/home-ci"
 
 # Test configuration
 check_interval: 30s
 test_script: "e2e/run.sh"
+has_result_file: true
 recent_commits_within: 240h
 test_timeout: 60m
 fetch_remote: true
@@ -30,4 +24,5 @@ github_actions_dispatch:
   enabled: true
   github_token_file: "/home/fjammes/src/github.com/k8s-school/ktbx/secret.yaml"
   dispatch_type: "test-dispatch-with-artifacts"
+  has_result_file: true
 

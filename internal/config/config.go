@@ -16,6 +16,7 @@ type GitHubActionsDispatch struct {
 	GitHubRepo      string `yaml:"github_repo"`
 	GitHubTokenFile string `yaml:"github_token_file"`
 	DispatchType    string `yaml:"dispatch_type"`
+	HasResultFile   bool   `yaml:"has_result_file"`
 }
 
 type Cleanup struct {
@@ -29,10 +30,7 @@ type Config struct {
 	RepoName   string `yaml:"repo_name"`  // Repository name for organization
 
 	// Directory structure
-	CacheDir     string `yaml:"cache_dir"`
-	StateDir     string `yaml:"state_dir"`
-	WorkspaceDir string `yaml:"workspace_dir"`
-	LogDir       string `yaml:"log_dir"`
+	WorkDir string `yaml:"work_dir"` // Base working directory - all paths calculated from this
 
 	// Test configuration
 	CheckInterval         time.Duration         `yaml:"check_interval"`
@@ -53,11 +51,8 @@ func Load(path string) (Config, error) {
 		Repository: "",
 		RepoName:   "",
 
-		// Directory structure with Linux FHS standard defaults
-		CacheDir:     "/var/cache/home-ci",
-		StateDir:     "/var/lib/home-ci/state",
-		WorkspaceDir: "/var/lib/home-ci/workspaces",
-		LogDir:       "/var/log/home-ci",
+		// Directory structure
+		WorkDir: "/tmp/home-ci",
 
 		// Test configuration
 		CheckInterval:       5 * time.Minute,
@@ -76,6 +71,7 @@ func Load(path string) (Config, error) {
 			GitHubRepo:      "",
 			GitHubTokenFile: "",
 			DispatchType:    "",
+			HasResultFile:   false,
 		},
 	}
 
@@ -116,21 +112,55 @@ func (c *Config) Normalize() error {
 		c.GitHubActionsDispatch.GitHubRepo = extractGitHubRepoFormat(c.Repository)
 	}
 
-	// For development/testing, fall back to local directories if standard paths don't exist
-	if !isDirWritable(c.CacheDir) {
-		c.CacheDir = filepath.Join(os.TempDir(), "home-ci", "cache")
-	}
-	if !isDirWritable(c.StateDir) {
-		c.StateDir = filepath.Join(os.TempDir(), "home-ci", "state")
-	}
-	if !isDirWritable(c.WorkspaceDir) {
-		c.WorkspaceDir = filepath.Join(os.TempDir(), "home-ci", "workspaces")
-	}
-	if !isDirWritable(c.LogDir) {
-		c.LogDir = filepath.Join(os.TempDir(), "home-ci", "logs")
+	// Validate work directory
+	if !isDirWritable(c.WorkDir) {
+		c.WorkDir = filepath.Join(os.TempDir(), "home-ci")
 	}
 
 	return nil
+}
+
+// GetCacheDir returns the cache directory path
+func (c *Config) GetCacheDir() string {
+	return filepath.Join(c.WorkDir, "cache")
+}
+
+// GetStateDir returns the state directory path
+func (c *Config) GetStateDir() string {
+	return filepath.Join(c.WorkDir, "state")
+}
+
+// GetWorkspaceDir returns the workspace directory for a specific run
+func (c *Config) GetWorkspaceDir(branch, commit string) string {
+	runID := c.createRunID(branch, commit)
+	return filepath.Join(c.WorkDir, c.RepoName, runID)
+}
+
+// GetLogsDir returns the logs directory for a specific run
+func (c *Config) GetLogsDir(branch, commit string) string {
+	runID := c.createRunID(branch, commit)
+	return filepath.Join(c.WorkDir, c.RepoName, runID, "logs")
+}
+
+// GetProjectDir returns the project source directory for a specific run
+func (c *Config) GetProjectDir(branch, commit string) string {
+	runID := c.createRunID(branch, commit)
+	return filepath.Join(c.WorkDir, c.RepoName, runID, "src", c.RepoName)
+}
+
+// createRunID creates a run identifier from branch and commit
+func (c *Config) createRunID(branch, commit string) string {
+	// Clean branch name (remove slashes, etc.)
+	branchClean := strings.ReplaceAll(branch, "/", "_")
+	branchClean = strings.ReplaceAll(branchClean, "\\", "_")
+
+	// Use short commit hash (first 8 chars)
+	commitShort := commit
+	if len(commit) > 8 {
+		commitShort = commit[:8]
+	}
+
+	return fmt.Sprintf("%s_%s", branchClean, commitShort)
 }
 
 // extractRepoName extracts the repository name from a Git URL or local path

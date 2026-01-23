@@ -181,9 +181,16 @@ func parseRepoString(repoString string) (owner, name string, err error) {
 	return parts[0], parts[1], nil
 }
 
-// findLatestYAMLReportFile looks for the most recent YAML e2e report file in the log directory
-func findLatestYAMLReportFile(logDir string) string {
-	// Pattern matches files like: 20260108-110938-e2e-report.yaml
+// findYAMLReportFile looks for the YAML e2e report file in the log directory
+func findYAMLReportFile(logDir string) string {
+	// Check for the standard e2e-report.yaml file first
+	standardReportFile := filepath.Join(logDir, "e2e-report.yaml")
+	if _, err := os.Stat(standardReportFile); err == nil {
+		slog.Debug("Found standard YAML e2e report file", "file", standardReportFile)
+		return standardReportFile
+	}
+
+	// Fall back to pattern matching for timestamped files like: 20260108-110938-e2e-report.yaml
 	yamlPattern := regexp.MustCompile(`^(\d{8}-\d{6})-e2e-report\.yaml$`)
 
 	entries, err := os.ReadDir(logDir)
@@ -212,14 +219,14 @@ func findLatestYAMLReportFile(logDir string) string {
 	}
 
 	if latestFile != "" {
-		slog.Debug("Found latest YAML e2e report file", "file", latestFile)
+		slog.Debug("Found timestamped YAML e2e report file", "file", latestFile)
 	}
 
 	return latestFile
 }
 
 // createArtifactsMap creates the artifacts map for the dispatch payload
-func createArtifactsMap(branch, commit string, success bool, logFilePath, resultFilePath string) map[string]interface{} {
+func createArtifactsMap(branch, commit string, success bool, logFilePath, resultFilePath string, hasResultFile bool) (map[string]interface{}, error) {
 	artifacts := make(map[string]interface{})
 
 	// Add log file artifact
@@ -250,10 +257,10 @@ func createArtifactsMap(branch, commit string, success bool, logFilePath, result
 		}
 	}
 
-	// Look for the latest YAML report file in the log directory
+	// Look for the YAML report file in the log directory
 	if logFilePath != "" {
 		logDir := filepath.Dir(logFilePath)
-		yamlReportFile := findLatestYAMLReportFile(logDir)
+		yamlReportFile := findYAMLReportFile(logDir)
 		if yamlReportFile != "" {
 			if content, err := readFileAsBase64(yamlReportFile); err == nil {
 				fileName := filepath.Base(yamlReportFile)
@@ -265,6 +272,9 @@ func createArtifactsMap(branch, commit string, success bool, logFilePath, result
 			} else {
 				slog.Debug("Failed to read YAML report file for dispatch", "file", yamlReportFile, "error", err)
 			}
+		} else if hasResultFile {
+			// If has_result_file is true but no YAML report file found, return error
+			return nil, fmt.Errorf("result file is required (has_result_file=true) but no e2e-report.yaml file found in %s. Make sure your test script creates the file specified by HOME_CI_RESULT_FILE environment variable", logDir)
 		}
 	}
 
@@ -274,11 +284,11 @@ func createArtifactsMap(branch, commit string, success bool, logFilePath, result
 		Type:    "metadata",
 	}
 
-	return artifacts
+	return artifacts, nil
 }
 
 // createClientPayload creates the complete client payload for the dispatch
-func createClientPayload(branch, commit string, success bool, logFilePath, resultFilePath string) map[string]interface{} {
+func createClientPayload(branch, commit string, success bool, logFilePath, resultFilePath string, hasResultFile bool) (map[string]interface{}, error) {
 	// Create artifact name with cleaned branch name and short commit
 	branchClean := strings.ReplaceAll(branch, "/", "_")
 	commitShort := commit
@@ -287,6 +297,11 @@ func createClientPayload(branch, commit string, success bool, logFilePath, resul
 	}
 	artifactName := fmt.Sprintf("log-%s-%s", branchClean, commitShort)
 
+	artifacts, err := createArtifactsMap(branch, commit, success, logFilePath, resultFilePath, hasResultFile)
+	if err != nil {
+		return nil, err
+	}
+
 	return map[string]interface{}{
 		"branch":        branch,
 		"commit":        commit,
@@ -294,13 +309,13 @@ func createClientPayload(branch, commit string, success bool, logFilePath, resul
 		"timestamp":     fmt.Sprintf("%d", time.Now().Unix()),
 		"source":        "home-ci",
 		"artifact_name": artifactName,
-		"artifacts":     createArtifactsMap(branch, commit, success, logFilePath, resultFilePath),
+		"artifacts":     artifacts,
 		"metadata": map[string]interface{}{
 			"branch":  branch,
 			"commit":  commit,
 			"success": success,
 		},
-	}
+	}, nil
 }
 
 // determineEventType determines the event type based on configuration and success status
@@ -344,7 +359,10 @@ func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool, l
 	eventType := determineEventType(config.DispatchType, success)
 
 	// Create payload
-	clientPayload := createClientPayload(branch, commit, success, logFilePath, resultFilePath)
+	clientPayload, err := createClientPayload(branch, commit, success, logFilePath, resultFilePath, config.HasResultFile)
+	if err != nil {
+		return fmt.Errorf("failed to create client payload: %w", err)
+	}
 
 	// Log dispatch attempt with request details
 	slog.Debug("Sending GitHub Actions dispatch",

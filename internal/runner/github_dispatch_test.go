@@ -254,7 +254,10 @@ func TestCreateClientPayload(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			payload := createClientPayload(tc.branch, tc.commit, tc.success, "", "")
+			payload, err := createClientPayload(tc.branch, tc.commit, tc.success, "", "", false)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
 
 			// Check that artifact_name is present in payload
 			artifactName, exists := payload["artifact_name"]

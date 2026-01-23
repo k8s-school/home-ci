@@ -57,7 +57,7 @@ func NewCleanupManager(keepTime time.Duration, workspaceDir string, ctx context.
 
 func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 	// Create git repository interface for both local and remote repositories
-	gitRepo, err := NewGitRepository(cfg.Repository, cfg.CacheDir)
+	gitRepo, err := NewGitRepository(cfg.Repository, cfg.GetCacheDir())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize git repository interface for '%s': %w\n\nPlease check your configuration:\n1. Ensure repository points to a valid git repository\n2. Example: repository: \"/path/to/your/repo\" or \"https://github.com/user/repo.git\"", cfg.Repository, err)
 	}
@@ -75,7 +75,7 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 	}
 
 	logDir := homeCIDir
-	stateManager := state.NewStateManager(cfg.StateDir, cfg.RepoName)
+	stateManager := state.NewStateManager(cfg.GetStateDir(), cfg.RepoName)
 
 	// Load existing state
 	if err := stateManager.LoadState(); err != nil {
@@ -84,7 +84,7 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 	}
 
 	testRunner := runner.NewTestRunner(cfg, configPath, logDir, ctx, stateManager)
-	cleanupMgr := NewCleanupManager(cfg.KeepTime, cfg.WorkspaceDir, ctx)
+	cleanupMgr := NewCleanupManager(cfg.KeepTime, cfg.WorkDir, ctx)
 
 	m := &Monitor{
 		config:       cfg,

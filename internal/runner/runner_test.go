@@ -1,11 +1,18 @@
 package runner
 
 import (
+	"context"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/k8s-school/home-ci/internal/config"
 )
 
 // MockStateManager implémente StateManager pour les tests
@@ -460,4 +467,166 @@ func TestConcurrencyFixValidation(t *testing.T) {
 		t.Logf("✅ FIX SUCCESSFUL: Concurrency limit respected! limit=%d, max_observed=%d",
 			maxConcurrent, maxObserved)
 	}
+}
+
+// TestExecuteTestHomeCIResultFileHandling verifies that HOME_CI_RESULT_FILE is properly set and accessible to test scripts
+func TestExecuteTestHomeCIResultFileHandling(t *testing.T) {
+	// Create temporary directories for test
+	tempDir, err := os.MkdirTemp("", "home-ci-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	logsDir := filepath.Join(tempDir, "logs")
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		t.Fatalf("Failed to create logs directory: %v", err)
+	}
+
+	workspaceDir := filepath.Join(tempDir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("Failed to create workspace directory: %v", err)
+	}
+
+	// Create a test script that verifies HOME_CI_RESULT_FILE is set and creates the result file
+	testScript := filepath.Join(workspaceDir, "test_script.sh")
+	scriptContent := `#!/bin/bash
+set -e
+
+# Check that HOME_CI_RESULT_FILE is set
+if [ -z "$HOME_CI_RESULT_FILE" ]; then
+    echo "ERROR: HOME_CI_RESULT_FILE environment variable is not set"
+    exit 1
+fi
+
+echo "SUCCESS: HOME_CI_RESULT_FILE is set to: $HOME_CI_RESULT_FILE"
+
+# Create the result file with test data
+cat > "$HOME_CI_RESULT_FILE" << 'EOF'
+test_name: "sample_e2e_test"
+status: "passed"
+duration: "45.2s"
+results:
+  - test_case: "login_functionality"
+    status: "passed"
+    duration: "12.1s"
+  - test_case: "data_validation"
+    status: "passed"
+    duration: "33.1s"
+artifacts:
+  - "screenshots/login_test.png"
+  - "reports/performance_metrics.json"
+EOF
+
+echo "Created result file at: $HOME_CI_RESULT_FILE"
+echo "Result file contents:"
+cat "$HOME_CI_RESULT_FILE"
+
+exit 0
+`
+
+	if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("Failed to create test script: %v", err)
+	}
+
+	// Create test config
+	cfg := config.Config{
+		Repository:  tempDir,
+		RepoName:    "test-repo",
+		TestScript:  testScript,
+		TestTimeout: time.Minute,
+		Options:     "",
+		WorkDir:     tempDir,
+	}
+
+	// Create log file
+	logFile, err := os.Create(filepath.Join(logsDir, "test.log"))
+	if err != nil {
+		t.Fatalf("Failed to create log file: %v", err)
+	}
+	defer logFile.Close()
+
+	// Create TestRunner and TestExecution
+	ctx := context.Background()
+	testRunner := &TestRunner{
+		config: cfg,
+		ctx:    ctx,
+	}
+
+	testResult := &TestResult{
+		Branch:    "test-branch",
+		Commit:    "abc123def",
+		StartTime: time.Now(),
+	}
+
+	// Create the proper logs directory that HOME_CI_RESULT_FILE will point to
+	expectedLogsDir := cfg.GetLogsDir("test-branch", "abc123def")
+	if err := os.MkdirAll(expectedLogsDir, 0755); err != nil {
+		t.Fatalf("Failed to create expected logs directory: %v", err)
+	}
+
+	testExecution := &TestExecution{
+		runner:       testRunner,
+		branch:       "test-branch",
+		commit:       "abc123def",
+		workspaceDir: workspaceDir,
+		projectDir:   workspaceDir,
+		logFile:      logFile,
+		testResult:   testResult,
+	}
+
+	// Execute the test
+	err = testExecution.executeTest()
+
+	// Verify execution was successful
+	if err != nil {
+		t.Errorf("executeTest() failed: %v", err)
+	}
+
+	if !testExecution.testResult.Success {
+		t.Errorf("Test should have succeeded, but testResult.Success = false")
+	}
+
+	// Verify that the result file was created
+	// Use the config method to get the correct logs directory path
+	expectedResultFile := filepath.Join(cfg.GetLogsDir("test-branch", "abc123def"), "e2e-report.yaml")
+	if _, err := os.Stat(expectedResultFile); os.IsNotExist(err) {
+		t.Errorf("Expected result file was not created: %s", expectedResultFile)
+	} else {
+		// Read and verify result file content
+		content, err := ioutil.ReadFile(expectedResultFile)
+		if err != nil {
+			t.Errorf("Failed to read result file: %v", err)
+		} else {
+			contentStr := string(content)
+			if !strings.Contains(contentStr, "sample_e2e_test") {
+				t.Errorf("Result file doesn't contain expected test content")
+			}
+			if !strings.Contains(contentStr, "login_functionality") {
+				t.Errorf("Result file doesn't contain expected test case content")
+			}
+			if !strings.Contains(contentStr, "artifacts:") {
+				t.Errorf("Result file doesn't contain expected artifacts section")
+			}
+			t.Logf("✅ Result file created successfully with expected content")
+		}
+	}
+
+	// Verify log file contains expected messages
+	logFile.Close()
+	logContent, err := ioutil.ReadFile(filepath.Join(logsDir, "test.log"))
+	if err != nil {
+		t.Errorf("Failed to read log file: %v", err)
+	} else {
+		logStr := string(logContent)
+		if !strings.Contains(logStr, "SUCCESS: HOME_CI_RESULT_FILE is set to:") {
+			t.Errorf("Log file doesn't contain expected success message about HOME_CI_RESULT_FILE")
+		}
+		if !strings.Contains(logStr, expectedResultFile) {
+			t.Errorf("Log file doesn't contain the expected result file path")
+		}
+		t.Logf("✅ Log file contains expected messages about HOME_CI_RESULT_FILE")
+	}
+
+	t.Logf("✅ Test completed successfully - HOME_CI_RESULT_FILE is properly handled")
 }
