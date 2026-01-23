@@ -450,9 +450,7 @@ func (te *TestExecution) executeTest() error {
 
 	// Set up environment variables for the test script
 	logsDir := te.runner.config.GetLogsDir(te.branch, te.commit)
-	// Create a timestamped result file name for better organization
-	timestamp := time.Now().Format("20060102-150405")
-	resultFile := filepath.Join(logsDir, fmt.Sprintf("%s-e2e-report.yaml", timestamp))
+	resultFile := filepath.Join(logsDir, "e2e-report.yaml")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("HOME_CI_RESULT_FILE=%s", resultFile))
 
 	// Log test execution

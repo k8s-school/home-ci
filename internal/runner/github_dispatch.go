@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -183,46 +182,48 @@ func parseRepoString(repoString string) (owner, name string, err error) {
 
 // findYAMLReportFile looks for the YAML e2e report file in the log directory
 func findYAMLReportFile(logDir string) string {
-	// Check for the standard e2e-report.yaml file first
+	// Check for the standard e2e-report.yaml file
 	standardReportFile := filepath.Join(logDir, "e2e-report.yaml")
 	if _, err := os.Stat(standardReportFile); err == nil {
-		slog.Debug("Found standard YAML e2e report file", "file", standardReportFile)
+		slog.Debug("Found YAML e2e report file", "file", standardReportFile)
 		return standardReportFile
 	}
 
-	// Fall back to pattern matching for timestamped files like: 20260108-110938-e2e-report.yaml
-	yamlPattern := regexp.MustCompile(`^(\d{8}-\d{6})-e2e-report\.yaml$`)
+	slog.Debug("No YAML e2e report file found", "dir", logDir)
+	return ""
+}
 
-	entries, err := os.ReadDir(logDir)
-	if err != nil {
-		slog.Debug("Failed to read log directory for YAML reports", "dir", logDir, "error", err)
-		return ""
-	}
-
-	var latestFile string
-	var latestTimestamp string
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		fileName := entry.Name()
-		matches := yamlPattern.FindStringSubmatch(fileName)
-		if len(matches) > 1 {
-			timestamp := matches[1]
-			if timestamp > latestTimestamp {
-				latestTimestamp = timestamp
-				latestFile = filepath.Join(logDir, fileName)
+// truncateBase64Content creates a truncated version of a payload for logging
+func truncateBase64Content(payload map[string]interface{}) map[string]interface{} {
+	truncated := make(map[string]interface{})
+	for key, value := range payload {
+		if key == "artifacts" {
+			if artifacts, ok := value.(map[string]interface{}); ok {
+				truncatedArtifacts := make(map[string]interface{})
+				for artifactKey, artifactValue := range artifacts {
+					if artifact, ok := artifactValue.(Artifact); ok {
+						truncatedArtifact := Artifact{
+							Type: artifact.Type,
+						}
+						if len(artifact.Content) > 15 {
+							truncatedArtifact.Content = artifact.Content[:15] + "..."
+						} else {
+							truncatedArtifact.Content = artifact.Content
+						}
+						truncatedArtifacts[artifactKey] = truncatedArtifact
+					} else {
+						truncatedArtifacts[artifactKey] = artifactValue
+					}
+				}
+				truncated[key] = truncatedArtifacts
+			} else {
+				truncated[key] = value
 			}
+		} else {
+			truncated[key] = value
 		}
 	}
-
-	if latestFile != "" {
-		slog.Debug("Found timestamped YAML e2e report file", "file", latestFile)
-	}
-
-	return latestFile
+	return truncated
 }
 
 // createArtifactsMap creates the artifacts map for the dispatch payload
@@ -371,7 +372,7 @@ func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool, l
 		"branch", branch,
 		"commit", commit[:8],
 		"success", success,
-		"payload", clientPayload)
+		"payload", truncateBase64Content(clientPayload))
 
 	// Send dispatch
 	if err := client.SendDispatch(repoOwner, repoName, eventType, clientPayload); err != nil {
