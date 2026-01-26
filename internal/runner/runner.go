@@ -621,12 +621,6 @@ func (te *TestExecution) sendGitHubNotificationIfNeeded() {
 	}
 }
 
-// saveTestResult saves the test result to JSON file
-func (te *TestExecution) saveTestResult() {
-	if err := te.runner.saveTestResult(*te.testResult, te.resultFilePath); err != nil {
-		slog.Error("Failed to save test result", "error", err, "file", te.resultFilePath)
-	}
-}
 
 // saveTestResult saves a test result to a JSON file
 func (tr *TestRunner) saveTestResult(result TestResult, filePath string) error {
