@@ -10,7 +10,7 @@ help:
 	@echo "  build-home-ci       Build the home-ci binary"
 	@echo "  build-e2e           Build the e2e test harness"
 	@echo "  build-diag          Build the diagnostics tool"
-	@echo "  install             Install home-ci and home-ci-diag binaries to /usr/local/bin"
+	@echo "  install             Install home-ci and home-ci-diag binaries to /opt/home-ci/bin"
 	@echo "  clean               Clean build artifacts"
 	@echo ""
 	@echo "Test targets:"
@@ -57,13 +57,14 @@ build-diag:
 
 # Install binaries to system
 install: build-home-ci build-diag
-	@echo "📦 Installing home-ci and home-ci-diag to /usr/local/bin..."
+	@echo "📦 Installing home-ci and home-ci-diag to /opt/home-ci/bin..."
 	@if [ ! -f "./home-ci" ]; then echo "❌ home-ci binary not found"; exit 1; fi
 	@if [ ! -f "./home-ci-diag" ]; then echo "❌ home-ci-diag binary not found"; exit 1; fi
-	sudo cp ./home-ci /usr/local/bin/
-	sudo cp ./home-ci-diag /usr/local/bin/
-	sudo chmod +x /usr/local/bin/home-ci
-	sudo chmod +x /usr/local/bin/home-ci-diag
+	sudo mkdir -p /opt/home-ci/bin
+	sudo cp ./home-ci /opt/home-ci/bin/
+	sudo cp ./home-ci-diag /opt/home-ci/bin/
+	sudo chmod +x /opt/home-ci/bin/home-ci
+	sudo chmod +x /opt/home-ci/bin/home-ci-diag
 	@echo "✅ Binaries installed successfully"
 
 # Run integration tests (default duration)
