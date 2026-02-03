@@ -395,40 +395,41 @@ func (th *E2ETestHarness) simulateContinuousActivity() {
 
 // countTestsFromResults counts the number of tests by counting JSON result files
 func (th *E2ETestHarness) countTestsFromResults() int {
-	// Check test results in logs/repo-name directory (simplified architecture)
-	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName)
-	if files, err := os.ReadDir(resultsDir); err == nil {
-		count := 0
-		for _, file := range files {
-			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-				filePath := filepath.Join(resultsDir, file.Name())
-				fileInfo, err := os.Stat(filePath)
-				if err == nil && fileInfo.ModTime().After(th.startTime) {
-					count++
-				}
-			}
-		}
-		if count > 0 {
-			return count
-		}
-	}
+	// Search recursively in the default WorkDir structure: /tmp/home-ci/<repoName>/*/logs/
+	repoDir := filepath.Join("/tmp/home-ci", th.repoName)
 
-	// Fallback to old architecture (local .home-ci directory)
-	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-	files, err := os.ReadDir(homeCIDir)
-	if err != nil {
+	// Check if repo directory exists
+	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
 		return 0
 	}
 
 	count := 0
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-			// Skip state.json file, only count test result files
-			if file.Name() != "state.json" {
-				count++
+
+	// Walk through all subdirectories looking for runID/logs directories
+	entries, err := os.ReadDir(repoDir)
+	if err != nil {
+		return 0
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// Check if this directory has a logs subdirectory
+			logsDir := filepath.Join(repoDir, entry.Name(), "logs")
+			if files, err := os.ReadDir(logsDir); err == nil {
+				for _, file := range files {
+					if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+						filePath := filepath.Join(logsDir, file.Name())
+						fileInfo, err := os.Stat(filePath)
+						// Count files created within the last hour (reasonable window for test duration)
+						if err == nil && time.Since(fileInfo.ModTime()) < time.Hour {
+							count++
+						}
+					}
+				}
 			}
 		}
 	}
+
 	return count
 }
 
