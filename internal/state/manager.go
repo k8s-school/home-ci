@@ -67,7 +67,7 @@ func (sm *StateManager) LoadState() error {
 	sm.stateMutex.Lock()
 	defer sm.stateMutex.Unlock()
 
-	// Try to unmarshal as new repository state format
+	// Try to unmarshal as repository state format
 	var newState RepositoryState
 	if err := json.Unmarshal(data, &newState); err == nil {
 		sm.state = &newState
@@ -83,54 +83,12 @@ func (sm *StateManager) LoadState() error {
 		return nil
 	}
 
-	// Fallback: try to migrate from old global state format
-	if err := sm.migrateFromOldFormat(data); err != nil {
-		slog.Error("Failed to parse state file", "repo", sm.repoName, "file", stateFile, "error", err)
-		return err
-	}
+	// Invalid or old format - start with clean state
+	slog.Info("State file has invalid or old format, starting with clean state",
+		"repo", sm.repoName, "file", stateFile)
+	// State is already initialized in NewStateManager with clean values
 
 	return nil
-}
-
-// migrateFromOldFormat attempts to migrate from the old global state format
-func (sm *StateManager) migrateFromOldFormat(data []byte) error {
-	// Try old global format
-	type OldState struct {
-		BranchStates map[string]*runner.BranchState `json:"branch_states"`
-		RunningTests []runner.RunningTest           `json:"running_tests"`
-	}
-
-	var oldState OldState
-	if err := json.Unmarshal(data, &oldState); err == nil {
-		sm.state.BranchStates = oldState.BranchStates
-		sm.state.RunningTests = oldState.RunningTests
-		if sm.state.RunningTests == nil {
-			sm.state.RunningTests = make([]runner.RunningTest, 0)
-		}
-		sm.state.LastUpdated = time.Now()
-
-		slog.Info("Migrated old state format to new repository-specific format",
-			"repo", sm.repoName, "branches", len(sm.state.BranchStates))
-
-		// Save in new format
-		return sm.saveStateUnsafe()
-	}
-
-	// Try even older format (just branch states)
-	var oldBranchStates map[string]*runner.BranchState
-	if err := json.Unmarshal(data, &oldBranchStates); err == nil {
-		sm.state.BranchStates = oldBranchStates
-		sm.state.RunningTests = make([]runner.RunningTest, 0)
-		sm.state.LastUpdated = time.Now()
-
-		slog.Info("Migrated very old state format to new repository-specific format",
-			"repo", sm.repoName, "branches", len(sm.state.BranchStates))
-
-		// Save in new format
-		return sm.saveStateUnsafe()
-	}
-
-	return fmt.Errorf("unrecognized state file format")
 }
 
 // SaveState saves the current state to the repository-specific state file
@@ -139,11 +97,7 @@ func (sm *StateManager) SaveState() error {
 	defer sm.stateMutex.Unlock()
 
 	sm.state.LastUpdated = time.Now()
-	return sm.saveStateUnsafe()
-}
 
-// saveStateUnsafe saves state without acquiring lock (internal use)
-func (sm *StateManager) saveStateUnsafe() error {
 	// Ensure RunningTests is never nil before marshaling
 	if sm.state.RunningTests == nil {
 		sm.state.RunningTests = make([]runner.RunningTest, 0)
@@ -153,6 +107,12 @@ func (sm *StateManager) saveStateUnsafe() error {
 	if err != nil {
 		slog.Error("Failed to marshal repository state to JSON", "repo", sm.repoName, "error", err)
 		return err
+	}
+
+	// Ensure state directory exists before writing file
+	if err := os.MkdirAll(sm.stateDir, 0755); err != nil {
+		slog.Error("Failed to create state directory", "repo", sm.repoName, "dir", sm.stateDir, "error", err)
+		return fmt.Errorf("failed to create state directory %s: %w", sm.stateDir, err)
 	}
 
 	stateFile := sm.getStateFilePath()
