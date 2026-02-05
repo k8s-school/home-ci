@@ -15,7 +15,6 @@ import (
 
 const (
 	// Directory names
-	homeCIDirName  = ".home-ci"
 	stateFileName  = "state.json"
 	tmpHomeCIRepos = "/tmp/home-ci/repos"
 
@@ -64,17 +63,6 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Get the actual repository path being used for monitoring
-	actualRepoPath := gitRepo.GetPath()
-
-	// Create .home-ci directory in repo for logs and state
-	homeCIDir := filepath.Join(actualRepoPath, homeCIDirName)
-	if err := os.MkdirAll(homeCIDir, dirPerm); err != nil {
-		cancel() // Clean up context on error
-		return nil, fmt.Errorf("failed to create .home-ci directory: %w", err)
-	}
-
-	logDir := homeCIDir
 	stateManager := state.NewStateManager(cfg.GetStateDir(), cfg.RepoName)
 
 	// Load existing state
@@ -83,7 +71,7 @@ func NewMonitor(cfg config.Config, configPath string) (*Monitor, error) {
 		return nil, fmt.Errorf("failed to load state: %w", err)
 	}
 
-	testRunner := runner.NewTestRunner(cfg, configPath, logDir, ctx, stateManager)
+	testRunner := runner.NewTestRunner(cfg, configPath, cfg.WorkDir, ctx, stateManager)
 	cleanupMgr := NewCleanupManager(cfg.KeepTime, cfg.WorkDir, ctx)
 
 	m := &Monitor{

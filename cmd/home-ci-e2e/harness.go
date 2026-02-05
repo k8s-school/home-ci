@@ -444,26 +444,34 @@ func (th *E2ETestHarness) saveTestData() error {
 
 	// Find the first timeout test result to get branch and commit info
 	branchCommit := "unknown-unknown"
-	homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-	files, err := os.ReadDir(homeCIDir)
-	if err == nil {
-		for _, file := range files {
-			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
-				jsonPath := filepath.Join(homeCIDir, file.Name())
-				content, readErr := os.ReadFile(jsonPath)
-				if readErr != nil {
-					continue
-				}
+	repoDir := filepath.Join("/tmp/home-ci", th.repoName)
 
-				var result TestResult
-				if unmarshalErr := json.Unmarshal(content, &result); unmarshalErr != nil {
-					continue
-				}
+	// Search through WorkDir structure for timeout test results
+	if entries, err := os.ReadDir(repoDir); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				logsDir := filepath.Join(repoDir, entry.Name(), "logs")
+				if logFiles, err := os.ReadDir(logsDir); err == nil {
+					for _, file := range logFiles {
+						if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+							jsonPath := filepath.Join(logsDir, file.Name())
+							content, readErr := os.ReadFile(jsonPath)
+							if readErr != nil {
+								continue
+							}
 
-				if result.TimedOut {
-					branchSafe := strings.ReplaceAll(result.Branch, "/", "-")
-					branchCommit = fmt.Sprintf("%s-%s", branchSafe, result.Commit[:8])
-					break
+							var result TestResult
+							if unmarshalErr := json.Unmarshal(content, &result); unmarshalErr != nil {
+								continue
+							}
+
+							if result.TimedOut {
+								branchSafe := strings.ReplaceAll(result.Branch, "/", "-")
+								branchCommit = fmt.Sprintf("%s-%s", branchSafe, result.Commit[:8])
+								break
+							}
+						}
+					}
 				}
 			}
 		}
@@ -545,23 +553,41 @@ func (th *E2ETestHarness) analyzeTestResults() bool {
 	log.Println("")
 	log.Println("=== Test Results Analysis ===")
 
-	// Read the home-ci test results from simplified architecture location
-	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName)
-	files, err := os.ReadDir(resultsDir)
-	if err != nil {
-		// Fallback to old location
-		homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-		files, err = os.ReadDir(homeCIDir)
-		if err != nil {
-			log.Printf("⚠️ Could not read test results directory: %v", err)
-			return false
-		}
-		// Use old location for processing
-		return th.processTestResultsInDirectory(files, homeCIDir)
+	// Search for test result files in the WorkDir structure: /tmp/home-ci/<repoName>/*/logs/
+	repoDir := filepath.Join("/tmp/home-ci", th.repoName)
+
+	// Check if repo directory exists
+	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
+		log.Printf("⚠️ Could not read test results directory: %v", err)
+		return false
 	}
 
-	// Use new location for processing
-	return th.processTestResultsInDirectory(files, resultsDir)
+	// Walk through all subdirectories looking for runID/logs directories
+	entries, err := os.ReadDir(repoDir)
+	if err != nil {
+		log.Printf("⚠️ Could not read test results directory: %v", err)
+		return false
+	}
+
+	// Process all logs directories found
+	allPassed := true
+	for _, entry := range entries {
+		if entry.IsDir() {
+			logsDir := filepath.Join(repoDir, entry.Name(), "logs")
+			if _, err := os.Stat(logsDir); err == nil {
+				// Read result files from logs directory
+				logFiles, err := os.ReadDir(logsDir)
+				if err != nil {
+					continue
+				}
+				if !th.processTestResultsInDirectory(logFiles, logsDir) {
+					allPassed = false
+				}
+			}
+		}
+	}
+
+	return allPassed
 }
 
 // processTestResultsInDirectory processes test results from a given directory

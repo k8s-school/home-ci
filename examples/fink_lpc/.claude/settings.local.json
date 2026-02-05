@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/fjammes/src/github.com/k8s-school/home-ci/internal/config/**)",
+      "Read(//home/fjammes/src/github.com/k8s-school/home-ci/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

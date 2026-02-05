@@ -20,31 +20,37 @@ func (th *E2ETestHarness) validateTestResults() ValidationResult {
 		return result
 	}
 
-	// Get all test result files from new architecture location
-	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "results")
-	files, err := os.ReadDir(resultsDir)
-	if err != nil {
-		// Fallback to old location
-		homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-		files, err = os.ReadDir(homeCIDir)
-		if err != nil {
-			log.Printf("⚠️ Failed to read test results directory: %v", err)
-			return result
-		}
+	// Search for test result files in the WorkDir structure: /tmp/home-ci/<repoName>/*/logs/
+	repoDir := filepath.Join("/tmp/home-ci", th.repoName)
 
-		// Process files from old location
-		for _, file := range files {
-			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") && file.Name() != "state.json" {
-				jsonPath := filepath.Join(homeCIDir, file.Name())
-				th.processTestResultFile(jsonPath, config, &result)
-			}
-		}
-	} else {
-		// Process files from new location
-		for _, file := range files {
-			if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
-				jsonPath := filepath.Join(resultsDir, file.Name())
-				th.processTestResultFile(jsonPath, config, &result)
+	// Check if repo directory exists
+	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
+		log.Printf("⚠️ Could not read test results directory: %v", err)
+		return result
+	}
+
+	// Walk through all subdirectories looking for runID/logs directories
+	entries, err := os.ReadDir(repoDir)
+	if err != nil {
+		log.Printf("⚠️ Failed to read test results directory: %v", err)
+		return result
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			logsDir := filepath.Join(repoDir, entry.Name(), "logs")
+			if _, err := os.Stat(logsDir); err == nil {
+				// Read result files from logs directory
+				logFiles, err := os.ReadDir(logsDir)
+				if err != nil {
+					continue
+				}
+				for _, file := range logFiles {
+					if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+						jsonPath := filepath.Join(logsDir, file.Name())
+						th.processTestResultFile(jsonPath, config, &result)
+					}
+				}
 			}
 		}
 	}
@@ -116,24 +122,39 @@ func (th *E2ETestHarness) verifyCleanupExecuted() bool {
 		return true // Not relevant for non-timeout tests
 	}
 
-	// Check if any test result JSON files indicate cleanup was executed in new architecture location
-	resultsDir := filepath.Join(th.tempRunDir, "logs", th.repoName, "results")
-	files, err := os.ReadDir(resultsDir)
-	if err != nil {
-		// Fallback to old location
-		homeCIDir := filepath.Join(th.testRepoPath, ".home-ci")
-		files, err = os.ReadDir(homeCIDir)
-		if err != nil {
-			log.Printf("⚠️ Could not read test results directory: %v", err)
-			return false
-		}
+	// Search for test result files in the WorkDir structure: /tmp/home-ci/<repoName>/*/logs/
+	repoDir := filepath.Join("/tmp/home-ci", th.repoName)
 
-		// Check old location
-		return th.checkCleanupInFiles(files, homeCIDir)
+	// Check if repo directory exists
+	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
+		log.Printf("⚠️ Could not read test results directory: %v", err)
+		return false
 	}
 
-	// Check new location
-	return th.checkCleanupInFiles(files, resultsDir)
+	// Walk through all subdirectories looking for runID/logs directories
+	entries, err := os.ReadDir(repoDir)
+	if err != nil {
+		log.Printf("⚠️ Failed to read test results directory: %v", err)
+		return false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			logsDir := filepath.Join(repoDir, entry.Name(), "logs")
+			if _, err := os.Stat(logsDir); err == nil {
+				// Read result files from logs directory
+				logFiles, err := os.ReadDir(logsDir)
+				if err != nil {
+					continue
+				}
+				if th.checkCleanupInFiles(logFiles, logsDir) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 // checkCleanupInFiles checks for cleanup execution in a list of files
