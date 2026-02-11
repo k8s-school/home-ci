@@ -26,9 +26,7 @@ github_actions_dispatch:
   github_token_file: "/opt/home-ci/secret.yaml"
   dispatch_type: "dispatch-with-artifacts"
   has_result_file: true
-
-
- ~$ cat /etc/systemd/system/ktbx-ci.service
+fink-ci@clrlsstsrv02:~$ cat /etc/systemd/system/ktbx-ci.service 
 [Unit]
 Description=Home CI Monitor - Git repository monitoring and CI service
 After=network-online.target
@@ -41,33 +39,38 @@ Type=simple
 User=fink-ci
 Group=fink-ci
 
-# Automatic directory management in /var/lib/
-StateDirectory=ktbx-ci
-WorkingDirectory=%S/ktbx-ci
-# Define variable for reuse within the file
-Environment="BASE_DIR=/var/lib/ktbx-ci"
+# Automatically creates /var/lib/ktbx-ci owned by fink-ci
+StateDirectory=%N
+StateDirectoryMode=0750
+WorkingDirectory=%S/%N
 
-# Prepare missing directories
-ExecStartPre=-/usr/bin/mkdir -p ${BASE_DIR}/bin ${BASE_DIR}/.kube
+# Ensure required subdirectories exist with correct permissions
+ExecStartPre=/usr/bin/install -d -m 0750 %S/%N/bin %S/%N/.kube
 
-# Environment configuration
-Environment=GOCACHE=${BASE_DIR}/go-build-cache
-Environment=GOPATH=${BASE_DIR}/go
-Environment=KTBX_INSTALL_DIR=${BASE_DIR}/bin
-Environment="CONFIG_FILE=/opt/home-ci/ktbx-ci.yaml"
-Environment="KUBECONFIG=${BASE_DIR}/.kube/config"
-Environment="PATH=${BASE_DIR}/bin:${BASE_DIR}/go/bin:/usr/local/go/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+# Environment
+Environment=GOCACHE=%S/%N/go-build-cache
+Environment=GOPATH=%S/%N/go
+Environment=KTBX_INSTALL_DIR=%S/%N/bin
+Environment=KUBECONFIG=%S/%N/.kube/config
+Environment=PATH=%S/%N/bin:%S/%N/go/bin:/usr/local/go/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Execution
-ExecStart=/opt/home-ci/bin/home-ci --config ${CONFIG_FILE} -v 3
+ExecStart=/opt/home-ci/bin/home-ci --config /opt/home-ci/ktbx-ci.yaml -v 3
 
-# Hardening
+# Security hardening
 NoNewPrivileges=true
-ProtectSystem=full
+ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
 DevicePolicy=closed
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
 
 # Reliability
 Restart=on-failure
@@ -76,7 +79,8 @@ RestartSec=5s
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=home-ci
+SyslogIdentifier=%N
 
 [Install]
 WantedBy=multi-user.target
+
