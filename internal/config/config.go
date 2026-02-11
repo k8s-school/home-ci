@@ -114,7 +114,7 @@ func (c *Config) Normalize() error {
 
 	// Validate work directory
 	if !isDirWritable(c.WorkDir) {
-		c.WorkDir = filepath.Join(os.TempDir(), "home-ci")
+		return fmt.Errorf("work directory '%s' is not accessible or writable", c.WorkDir)
 	}
 
 	return nil
