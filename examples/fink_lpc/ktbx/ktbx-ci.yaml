@@ -1,0 +1,28 @@
+# Repository configuration
+repository: "https://github.com/k8s-school/ktbx.git"
+repo_name: "ktbx"
+
+# Working directory - all subdirectories calculated from this base path
+work_dir: "/var/lib/ktbx-ci/workdir"
+
+# Test configuration
+check_interval: 30s
+test_script: "e2e/run.sh"
+has_result_file: true
+recent_commits_within: 240h
+test_timeout: 60m
+fetch_remote: true
+max_concurrent_runs: 1
+keep_time: 2h
+
+# TODO
+cleanup:
+  after_e2e: true 
+  script: "e2e/clean.sh"
+
+github_actions_dispatch:
+  enabled: true
+  github_token_file: "/opt/home-ci/ktbx-secret.yaml"
+  dispatch_type: "dispatch-with-artifacts"
+  has_result_file: true
+

@@ -1,0 +1,56 @@
+[Unit]
+Description=Home CI for ktbx
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=fink-ci
+Group=fink-ci
+
+# Automatically creates /var/lib/<project>-ci owned by fink-ci
+StateDirectory=%N
+StateDirectoryMode=0750
+WorkingDirectory=%S/%N
+
+# Ensure required subdirectories exist with correct permissions
+ExecStartPre=/usr/bin/install -d -m 0750 %S/%N/bin %S/%N/.kube
+
+# Environment
+Environment=GOCACHE=%S/%N/go-build-cache
+Environment=GOPATH=%S/%N/go
+Environment=KTBX_INSTALL_DIR=%S/%N/bin
+Environment=KUBECONFIG=%S/%N/.kube/config
+Environment=PATH=%S/%N/bin:%S/%N/go/bin:/usr/local/go/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Execution
+ExecStart=/opt/home-ci/bin/home-ci --config /opt/home-ci/%N.yaml -v 3
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+DevicePolicy=closed
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+# Reliability
+Restart=on-failure
+RestartSec=5s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=%N
+
+[Install]
+WantedBy=multi-user.target
