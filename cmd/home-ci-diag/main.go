@@ -364,19 +364,32 @@ func readConfig(configPath string) (*Config, error) {
 
 // readTestResults reads all test result JSON files from the new architecture directories
 func readTestResults(repoPath string) ([]TestResult, error) {
-	// Try to read config to get log directory
+	// Try to read config to get repo name
 	config, err := readConfig(configPath)
-	if err != nil || config.LogDir == "" || config.RepoName == "" {
+	if err != nil || config.RepoName == "" {
 		// Fallback to old location
 		return readTestResultsOld(repoPath)
 	}
 
-	// Use simplified architecture location: log_dir/repo_name/
-	resultsDir := filepath.Join(config.LogDir, config.RepoName)
-	files, err := filepath.Glob(filepath.Join(resultsDir, "*.json"))
-	if err != nil {
-		// If new location fails, try fallback
-		return readTestResultsOld(repoPath)
+	// The actual test results are stored in the global /tmp/home-ci/{repo-name}/ directory structure
+	// Look for pattern: /tmp/home-ci/{repo-name}/{branch}_{commit}/logs/run.json
+	globalRepoDir := filepath.Join("/tmp/home-ci", config.RepoName)
+
+	// First, try to find subdirectories that match {branch}_{commit} pattern
+	pattern := filepath.Join(globalRepoDir, "*", "logs", "run.json")
+	files, err := filepath.Glob(pattern)
+	if err != nil || len(files) == 0 {
+		// If global location fails, try configured log directory
+		if config.LogDir != "" {
+			resultsDir := filepath.Join(config.LogDir, config.RepoName)
+			files, err = filepath.Glob(filepath.Join(resultsDir, "*.json"))
+			if err != nil || len(files) == 0 {
+				// Finally, try fallback
+				return readTestResultsOld(repoPath)
+			}
+		} else {
+			return readTestResultsOld(repoPath)
+		}
 	}
 
 	var results []TestResult
