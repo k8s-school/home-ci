@@ -314,6 +314,38 @@ func (te *TestExecution) directCloneToWorkspace() error {
 func (te *TestExecution) cloneFromOrigin() error {
 	fmt.Fprintf(te.logFile, "Cloning branch %s from origin using go-git API...\n", te.branch)
 
+	// Log detailed clone operation info
+	slog.Info("Starting git clone operation",
+		"branch", te.branch,
+		"commit", te.commit,
+		"target_directory", te.projectDir,
+		"repository_url", te.runner.config.Repository)
+
+	// Check if target directory already exists
+	if info, err := os.Stat(te.projectDir); err == nil {
+		fmt.Fprintf(te.logFile, "WARNING: Target directory already exists: %s\n", te.projectDir)
+		slog.Warn("Git clone target directory already exists",
+			"directory", te.projectDir,
+			"is_dir", info.IsDir(),
+			"branch", te.branch,
+			"commit", te.commit)
+
+		// List contents for debugging
+		if entries, readErr := os.ReadDir(te.projectDir); readErr == nil {
+			fmt.Fprintf(te.logFile, "Directory contents: ")
+			for i, entry := range entries {
+				if i > 0 {
+					fmt.Fprintf(te.logFile, ", ")
+				}
+				fmt.Fprintf(te.logFile, "%s", entry.Name())
+			}
+			fmt.Fprintf(te.logFile, "\n")
+		}
+	} else {
+		fmt.Fprintf(te.logFile, "Target directory does not exist: %s\n", te.projectDir)
+		slog.Info("Git clone target directory is free", "directory", te.projectDir)
+	}
+
 	// Clone from remote origin with specific branch and full history
 	repo, err := git.PlainClone(te.projectDir, false, &git.CloneOptions{
 		URL:           te.runner.config.Repository,
@@ -324,8 +356,22 @@ func (te *TestExecution) cloneFromOrigin() error {
 
 	if err != nil {
 		fmt.Fprintf(te.logFile, "Failed to clone repository from origin using go-git: %v\n", err)
-		return fmt.Errorf("failed to clone repository from %s: %w", te.runner.config.Repository, err)
+		slog.Error("Git clone operation failed",
+			"repository_url", te.runner.config.Repository,
+			"branch", te.branch,
+			"commit", te.commit,
+			"target_directory", te.projectDir,
+			"error", err.Error())
+		return fmt.Errorf("failed to clone repository from %s to %s: %w", te.runner.config.Repository, te.projectDir, err)
 	}
+
+	// Success!
+	fmt.Fprintf(te.logFile, "Successfully cloned to: %s\n", te.projectDir)
+	slog.Info("Git clone operation successful",
+		"repository_url", te.runner.config.Repository,
+		"branch", te.branch,
+		"commit", te.commit,
+		"target_directory", te.projectDir)
 
 	// Verify we're on the expected commit
 	fmt.Fprintf(te.logFile, "Verifying commit %s using go-git...\n", te.commit)
