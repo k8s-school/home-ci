@@ -17,6 +17,9 @@ type GitHubActionsDispatch struct {
 	GitHubTokenFile string `yaml:"github_token_file"`
 	DispatchType    string `yaml:"dispatch_type"`
 	HasResultFile   bool   `yaml:"has_result_file"`
+	MaxPayloadSize  int    `yaml:"max_payload_size"`  // Max total payload size in bytes (default: 45KB)
+	MaxLogLines     int    `yaml:"max_log_lines"`     // Max lines to keep from end of log files (default: 1000)
+	MaxFileBytes    int    `yaml:"max_file_bytes"`    // Max bytes per file before truncation (default: 20KB)
 }
 
 type Cleanup struct {
@@ -72,6 +75,9 @@ func Load(path string) (Config, error) {
 			GitHubTokenFile: "",
 			DispatchType:    "",
 			HasResultFile:   false,
+			MaxPayloadSize:  45 * 1024, // 45KB default
+			MaxLogLines:     1000,      // Keep last 1000 lines
+			MaxFileBytes:    20 * 1024, // 20KB max per file
 		},
 	}
 

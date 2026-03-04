@@ -254,7 +254,7 @@ func TestCreateClientPayload(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			payload, err := createClientPayload(tc.branch, tc.commit, tc.success, "", "", false)
+			payload, err := createClientPayload(tc.branch, tc.commit, tc.success, "", "", false, 20*1024, 1000)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
