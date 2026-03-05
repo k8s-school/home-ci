@@ -1,6 +1,10 @@
 package runner
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -254,7 +258,7 @@ func TestCreateClientPayload(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			payload, err := createClientPayload(tc.branch, tc.commit, tc.success, "", "", false, 20*1024, 1000)
+			payload, err := createClientPayload(tc.branch, tc.commit, tc.success, "", "", false, 20*1024, 1000, false)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -295,5 +299,279 @@ func TestCreateClientPayload(t *testing.T) {
 				t.Errorf("Expected success %v, got %v", tc.success, payload["success"])
 			}
 		})
+	}
+}
+
+func TestCreateCompressedArtifactsArchive(t *testing.T) {
+	// Test data
+	testFiles := []FileToArchive{
+		{
+			Name:         "test.log",
+			Data:         []byte("This is a test log file\nwith multiple lines\nof content"),
+			Type:         "log",
+			Truncated:    false,
+			OriginalSize: 55,
+		},
+		{
+			Name:         "result.json",
+			Data:         []byte(`{"test": "passed", "duration": "5s"}`),
+			Type:         "result",
+			Truncated:    false,
+			OriginalSize: 35,
+		},
+		{
+			Name:         "report.yaml",
+			Data:         []byte("status: success\ncount: 42"),
+			Type:         "e2e-report",
+			Truncated:    true,
+			OriginalSize: 100,
+		},
+	}
+
+	// Create archive
+	artifact, err := createCompressedArtifactsArchive(testFiles)
+	if err != nil {
+		t.Fatalf("Failed to create archive: %v", err)
+	}
+
+	// Check artifact properties
+	if artifact.Type != "archive" {
+		t.Errorf("Expected type 'archive', got '%s'", artifact.Type)
+	}
+	if !artifact.Compressed {
+		t.Error("Expected artifact to be marked as compressed")
+	}
+	if !artifact.Truncated {
+		t.Error("Expected artifact to be marked as truncated (since one file was truncated)")
+	}
+	if artifact.OriginalSize != 190 {
+		t.Errorf("Expected original size 190, got %d", artifact.OriginalSize)
+	}
+	if len(artifact.Files) != 3 {
+		t.Errorf("Expected 3 file metadata entries, got %d", len(artifact.Files))
+	}
+
+	// Decode and verify archive content
+	decodedData, err := base64.StdEncoding.DecodeString(artifact.Content)
+	if err != nil {
+		t.Fatalf("Failed to decode base64 content: %v", err)
+	}
+
+	// Decompress gzip
+	gz, err := gzip.NewReader(bytes.NewReader(decodedData))
+	if err != nil {
+		t.Fatalf("Failed to create gzip reader: %v", err)
+	}
+	defer gz.Close()
+
+	// Read tar archive
+	tr := tar.NewReader(gz)
+	filesFound := make(map[string][]byte)
+
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			break // End of archive
+		}
+
+		var buf bytes.Buffer
+		if _, err := buf.ReadFrom(tr); err != nil {
+			t.Fatalf("Failed to read file data from tar: %v", err)
+		}
+		filesFound[hdr.Name] = buf.Bytes()
+	}
+
+	// Verify all files are present with correct content
+	if len(filesFound) != 3 {
+		t.Errorf("Expected 3 files in archive, found %d", len(filesFound))
+	}
+
+	for _, expectedFile := range testFiles {
+		actualData, found := filesFound[expectedFile.Name]
+		if !found {
+			t.Errorf("File %s not found in archive", expectedFile.Name)
+			continue
+		}
+		if !bytes.Equal(actualData, expectedFile.Data) {
+			t.Errorf("Content mismatch for file %s. Expected %q, got %q",
+				expectedFile.Name, string(expectedFile.Data), string(actualData))
+		}
+	}
+
+	// Verify file metadata
+	for i, expectedFile := range testFiles {
+		if i >= len(artifact.Files) {
+			t.Errorf("Missing metadata for file %s", expectedFile.Name)
+			continue
+		}
+		meta := artifact.Files[i]
+		if meta.Name != expectedFile.Name {
+			t.Errorf("Metadata name mismatch: expected %s, got %s", expectedFile.Name, meta.Name)
+		}
+		if meta.Type != expectedFile.Type {
+			t.Errorf("Metadata type mismatch for %s: expected %s, got %s", expectedFile.Name, expectedFile.Type, meta.Type)
+		}
+		if meta.Truncated != expectedFile.Truncated {
+			t.Errorf("Metadata truncated mismatch for %s: expected %v, got %v", expectedFile.Name, expectedFile.Truncated, meta.Truncated)
+		}
+		if meta.OriginalSize != expectedFile.OriginalSize {
+			t.Errorf("Metadata original size mismatch for %s: expected %d, got %d", expectedFile.Name, expectedFile.OriginalSize, meta.OriginalSize)
+		}
+	}
+}
+
+func TestCreateCompressedArtifactsArchiveEmpty(t *testing.T) {
+	_, err := createCompressedArtifactsArchive([]FileToArchive{})
+	if err == nil {
+		t.Error("Expected error for empty files list")
+	}
+	if !strings.Contains(err.Error(), "no files to archive") {
+		t.Errorf("Expected 'no files to archive' error, got: %v", err)
+	}
+}
+
+func TestReadFileForArchive(t *testing.T) {
+	// Create temporary file for test
+	tempDir, err := os.MkdirTemp("", "archive_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	testContent := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
+	testFile := filepath.Join(tempDir, "test.log")
+	err = os.WriteFile(testFile, []byte(testContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	// Test reading without truncation
+	file, err := readFileForArchive(testFile, 1000, 1000, "log")
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+
+	if file.Name != "test.log" {
+		t.Errorf("Expected name 'test.log', got '%s'", file.Name)
+	}
+	if file.Type != "log" {
+		t.Errorf("Expected type 'log', got '%s'", file.Type)
+	}
+	if file.Truncated {
+		t.Error("Expected file not to be truncated")
+	}
+	if string(file.Data) != testContent {
+		t.Errorf("Content mismatch. Expected %q, got %q", testContent, string(file.Data))
+	}
+	if file.OriginalSize != len(testContent) {
+		t.Errorf("Expected original size %d, got %d", len(testContent), file.OriginalSize)
+	}
+
+	// Test reading with line truncation (keep last 2 lines)
+	file, err = readFileForArchive(testFile, 1000, 2, "log")
+	if err != nil {
+		t.Fatalf("Failed to read file with line truncation: %v", err)
+	}
+
+	if !file.Truncated {
+		t.Error("Expected file to be truncated")
+	}
+	expectedTruncated := "Line 4\nLine 5"
+	if string(file.Data) != expectedTruncated {
+		t.Errorf("Truncated content mismatch. Expected %q, got %q", expectedTruncated, string(file.Data))
+	}
+	if file.OriginalSize != len(testContent) {
+		t.Errorf("Expected original size %d, got %d", len(testContent), file.OriginalSize)
+	}
+
+	// Test reading with byte truncation
+	file, err = readFileForArchive(testFile, 10, 1000, "log")
+	if err != nil {
+		t.Fatalf("Failed to read file with byte truncation: %v", err)
+	}
+
+	if !file.Truncated {
+		t.Error("Expected file to be truncated")
+	}
+	if len(file.Data) > 10 {
+		t.Errorf("Expected data length <= 10, got %d", len(file.Data))
+	}
+	if file.OriginalSize != len(testContent) {
+		t.Errorf("Expected original size %d, got %d", len(testContent), file.OriginalSize)
+	}
+}
+
+func TestCreateArtifactsMapCombinedArchive(t *testing.T) {
+	// Create temporary directory and files for test
+	tempDir, err := os.MkdirTemp("", "artifacts_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test files
+	logFile := filepath.Join(tempDir, "test.log")
+	logContent := "Test log content\nwith multiple lines"
+	err = os.WriteFile(logFile, []byte(logContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write log file: %v", err)
+	}
+
+	resultFile := filepath.Join(tempDir, "result.json")
+	resultContent := `{"status": "success", "count": 5}`
+	err = os.WriteFile(resultFile, []byte(resultContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write result file: %v", err)
+	}
+
+	// Test with combined archive mode enabled
+	artifacts, err := createArtifactsMap("main", "abc123", true, logFile, resultFile, false, 1000, 100, true)
+	if err != nil {
+		t.Fatalf("Failed to create artifacts map: %v", err)
+	}
+
+	// Check that we have the combined archive
+	archiveArtifact, found := artifacts["combined-archive.tar.gz"]
+	if !found {
+		t.Error("Expected combined archive artifact not found")
+		return
+	}
+
+	artifact, ok := archiveArtifact.(Artifact)
+	if !ok {
+		t.Errorf("Expected Artifact type, got %T", archiveArtifact)
+		return
+	}
+
+	if artifact.Type != "archive" {
+		t.Errorf("Expected archive type, got %s", artifact.Type)
+	}
+	if !artifact.Compressed {
+		t.Error("Expected archive to be compressed")
+	}
+	if len(artifact.Files) < 2 {
+		t.Errorf("Expected at least 2 files in archive metadata, got %d", len(artifact.Files))
+	}
+
+	// Check metadata artifact is still present
+	if _, found := artifacts["metadata"]; !found {
+		t.Error("Expected metadata artifact not found")
+	}
+
+	// Test with combined archive mode disabled (original behavior)
+	artifacts, err = createArtifactsMap("main", "abc123", true, logFile, resultFile, false, 1000, 100, false)
+	if err != nil {
+		t.Fatalf("Failed to create artifacts map in individual mode: %v", err)
+	}
+
+	// Check that individual files are present instead of archive
+	if _, found := artifacts["combined-archive.tar.gz"]; found {
+		t.Error("Did not expect combined archive when disabled")
+	}
+	if _, found := artifacts["test.log"]; !found {
+		t.Error("Expected individual log file artifact not found")
+	}
+	if _, found := artifacts["result.json"]; !found {
+		t.Error("Expected individual result file artifact not found")
 	}
 }
