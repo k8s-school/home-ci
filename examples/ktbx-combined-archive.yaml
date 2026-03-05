@@ -28,4 +28,4 @@ github_actions_dispatch:
   max_payload_size: 45000    # 45KB limit for GitHub API
   max_log_lines: 1000        # Keep last 1000 lines of logs
   max_file_bytes: 20000      # 20KB max per file before truncation
-  use_combined_archive: true # Use single tar.gz archive for better compression
+  # Combined archive is now the default and only mode

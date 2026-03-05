@@ -185,18 +185,6 @@ func readFileAsBase64(filePath string) (string, error) {
 	return base64.StdEncoding.EncodeToString(data), nil
 }
 
-// compressData compresses data using gzip
-func compressData(data []byte) ([]byte, error) {
-	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
-	if _, err := gz.Write(data); err != nil {
-		return nil, err
-	}
-	if err := gz.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
 
 // FileToArchive represents a file to be added to the tar.gz archive
 type FileToArchive struct {
@@ -325,56 +313,6 @@ func readFileForArchive(filePath string, maxBytes, maxLines int, fileType string
 	}, nil
 }
 
-// readFileAsBase64WithLimits reads a file with size/line limits, compresses, and returns base64 encoded string
-func readFileAsBase64WithLimits(filePath string, maxBytes, maxLines int) (Artifact, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return Artifact{}, err
-	}
-
-	originalSize := len(data)
-	truncated := false
-
-	// If file is larger than maxBytes, truncate to last maxLines
-	if len(data) > maxBytes || (maxLines > 0 && strings.Count(string(data), "\n") > maxLines) {
-		lines := strings.Split(string(data), "\n")
-		if len(lines) > maxLines && maxLines > 0 {
-			// Keep last maxLines
-			lines = lines[len(lines)-maxLines:]
-			truncated = true
-		}
-
-		// Reconstruct data
-		truncatedContent := strings.Join(lines, "\n")
-		data = []byte(truncatedContent)
-
-		// Double-check byte limit
-		if len(data) > maxBytes {
-			// Truncate to maxBytes, keeping end of file
-			if len(data) > maxBytes {
-				data = data[len(data)-maxBytes:]
-				truncated = true
-			}
-		}
-	}
-
-	// Try compression to save even more space
-	compressedData, err := compressData(data)
-	compressed := false
-	if err == nil && len(compressedData) < len(data) {
-		data = compressedData
-		compressed = true
-	}
-
-	content := base64.StdEncoding.EncodeToString(data)
-
-	return Artifact{
-		Content:     content,
-		Compressed:  compressed,
-		Truncated:   truncated,
-		OriginalSize: originalSize,
-	}, nil
-}
 
 // parseRepoString parses "owner/repo" format and returns owner and repo name
 func parseRepoString(repoString string) (owner, name string, err error) {
@@ -434,133 +372,65 @@ func truncateBase64Content(payload map[string]interface{}) map[string]interface{
 	return truncated
 }
 
-// createArtifactsMap creates the artifacts map for the dispatch payload
-func createArtifactsMap(branch, commit string, success bool, logFilePath, resultFilePath string, hasResultFile bool, maxFileBytes, maxLogLines int, useCombinedArchive bool) (map[string]interface{}, error) {
+// createArtifactsMap creates the artifacts map for the dispatch payload using combined archive
+func createArtifactsMap(branch, commit string, success bool, logFilePath, resultFilePath string, hasResultFile bool, maxFileBytes, maxLogLines int) (map[string]interface{}, error) {
+	slog.Debug("Creating artifacts map", "branch", branch, "commit", commit, "success", success, "logFile", logFilePath, "resultFile", resultFilePath, "hasResultFile", hasResultFile)
 	artifacts := make(map[string]interface{})
+	var files []FileToArchive
 
-	if useCombinedArchive {
-		// Use combined archive mode
-		var files []FileToArchive
+	// Add log file
+	if logFilePath != "" {
+		if file, err := readFileForArchive(logFilePath, maxFileBytes, maxLogLines, "log"); err == nil {
+			files = append(files, file)
+			if file.Truncated {
+				slog.Warn("Log file truncated for archive", "file", file.Name, "original_size", file.OriginalSize, "max_bytes", maxFileBytes, "max_lines", maxLogLines)
+			}
+			slog.Debug("Added log file to archive", "file", file.Name, "size", len(file.Data), "truncated", file.Truncated)
+		} else {
+			slog.Debug("Failed to read log file for archive", "file", logFilePath, "error", err)
+		}
+	}
 
-		// Add log file
-		if logFilePath != "" {
-			if file, err := readFileForArchive(logFilePath, maxFileBytes, maxLogLines, "log"); err == nil {
+	// Add result file
+	if resultFilePath != "" {
+		if file, err := readFileForArchive(resultFilePath, maxFileBytes, maxLogLines, "result"); err == nil {
+			files = append(files, file)
+			if file.Truncated {
+				slog.Warn("Result file truncated for archive", "file", file.Name, "original_size", file.OriginalSize, "max_bytes", maxFileBytes, "max_lines", maxLogLines)
+			}
+			slog.Debug("Added result file to archive", "file", file.Name, "size", len(file.Data), "truncated", file.Truncated)
+		} else {
+			slog.Debug("Failed to read result file for archive", "file", resultFilePath, "error", err)
+		}
+	}
+
+	// Look for the YAML report file
+	if logFilePath != "" {
+		logDir := filepath.Dir(logFilePath)
+		yamlReportFile := findYAMLReportFile(logDir)
+		if yamlReportFile != "" {
+			if file, err := readFileForArchive(yamlReportFile, maxFileBytes, maxLogLines, "e2e-report"); err == nil {
 				files = append(files, file)
 				if file.Truncated {
-					slog.Warn("Log file truncated for archive", "file", file.Name, "original_size", file.OriginalSize, "max_bytes", maxFileBytes, "max_lines", maxLogLines)
+					slog.Warn("YAML report file truncated for archive", "file", file.Name, "original_size", file.OriginalSize, "max_bytes", maxFileBytes, "max_lines", maxLogLines)
 				}
-				slog.Debug("Added log file to archive", "file", file.Name, "size", len(file.Data), "truncated", file.Truncated)
+				slog.Debug("Added YAML report file to archive", "file", file.Name, "size", len(file.Data), "truncated", file.Truncated)
 			} else {
-				slog.Debug("Failed to read log file for archive", "file", logFilePath, "error", err)
+				slog.Debug("Failed to read YAML report file for archive", "file", yamlReportFile, "error", err)
 			}
+		} else if hasResultFile {
+			return nil, fmt.Errorf("result file is required (has_result_file=true) but no e2e-report.yaml file found in %s. Make sure your test script creates the file specified by HOME_CI_RESULT_FILE environment variable", logDir)
 		}
+	}
 
-		// Add result file
-		if resultFilePath != "" {
-			if file, err := readFileForArchive(resultFilePath, maxFileBytes, maxLogLines, "result"); err == nil {
-				files = append(files, file)
-				if file.Truncated {
-					slog.Warn("Result file truncated for archive", "file", file.Name, "original_size", file.OriginalSize, "max_bytes", maxFileBytes, "max_lines", maxLogLines)
-				}
-				slog.Debug("Added result file to archive", "file", file.Name, "size", len(file.Data), "truncated", file.Truncated)
-			} else {
-				slog.Debug("Failed to read result file for archive", "file", resultFilePath, "error", err)
-			}
-		}
-
-		// Look for the YAML report file
-		if logFilePath != "" {
-			logDir := filepath.Dir(logFilePath)
-			yamlReportFile := findYAMLReportFile(logDir)
-			if yamlReportFile != "" {
-				if file, err := readFileForArchive(yamlReportFile, maxFileBytes, maxLogLines, "e2e-report"); err == nil {
-					files = append(files, file)
-					if file.Truncated {
-						slog.Warn("YAML report file truncated for archive", "file", file.Name, "original_size", file.OriginalSize, "max_bytes", maxFileBytes, "max_lines", maxLogLines)
-					}
-					slog.Debug("Added YAML report file to archive", "file", file.Name, "size", len(file.Data), "truncated", file.Truncated)
-				} else {
-					slog.Debug("Failed to read YAML report file for archive", "file", yamlReportFile, "error", err)
-				}
-			} else if hasResultFile {
-				return nil, fmt.Errorf("result file is required (has_result_file=true) but no e2e-report.yaml file found in %s. Make sure your test script creates the file specified by HOME_CI_RESULT_FILE environment variable", logDir)
-			}
-		}
-
-		// Create archive if we have files
-		if len(files) > 0 {
-			if archive, err := createCompressedArtifactsArchive(files); err == nil {
-				artifacts["combined-archive.tar.gz"] = archive
-				slog.Info("Created combined archive", "files_count", len(files), "compressed_size", len(archive.Content), "original_total_size", archive.OriginalSize, "truncated", archive.Truncated)
-			} else {
-				slog.Error("Failed to create combined archive", "error", err)
-				return nil, fmt.Errorf("failed to create combined archive: %w", err)
-			}
-		}
-	} else {
-		// Use individual compression mode (original behavior)
-		// Add log file artifact with truncation and compression
-		if logFilePath != "" {
-			if artifact, err := readFileAsBase64WithLimits(logFilePath, maxFileBytes, maxLogLines); err == nil {
-				fileName := filepath.Base(logFilePath)
-				artifact.Type = "log"
-				artifacts[fileName] = artifact
-
-				if artifact.Truncated {
-					slog.Warn("Log file truncated for dispatch payload", "file", fileName, "original_size", artifact.OriginalSize, "max_bytes", maxFileBytes, "max_lines", maxLogLines)
-				}
-				if artifact.Compressed {
-					slog.Debug("Log file compressed for dispatch payload", "file", fileName, "original_size", artifact.OriginalSize, "compressed_size", len(artifact.Content))
-				}
-				slog.Debug("Added log file to dispatch payload", "file", fileName, "size", len(artifact.Content), "truncated", artifact.Truncated, "compressed", artifact.Compressed)
-			} else {
-				slog.Debug("Failed to read log file for dispatch", "file", logFilePath, "error", err)
-			}
-		}
-
-		// Add result file artifact with truncation and compression
-		if resultFilePath != "" {
-			if artifact, err := readFileAsBase64WithLimits(resultFilePath, maxFileBytes, maxLogLines); err == nil {
-				fileName := filepath.Base(resultFilePath)
-				artifact.Type = "result"
-				artifacts[fileName] = artifact
-
-				if artifact.Truncated {
-					slog.Warn("Result file truncated for dispatch payload", "file", fileName, "original_size", artifact.OriginalSize, "max_bytes", maxFileBytes, "max_lines", maxLogLines)
-				}
-				if artifact.Compressed {
-					slog.Debug("Result file compressed for dispatch payload", "file", fileName, "original_size", artifact.OriginalSize, "compressed_size", len(artifact.Content))
-				}
-				slog.Debug("Added result file to dispatch payload", "file", fileName, "size", len(artifact.Content), "truncated", artifact.Truncated, "compressed", artifact.Compressed)
-			} else {
-				slog.Debug("Failed to read result file for dispatch", "file", resultFilePath, "error", err)
-			}
-		}
-
-		// Look for the YAML report file in the log directory
-		if logFilePath != "" {
-			logDir := filepath.Dir(logFilePath)
-			yamlReportFile := findYAMLReportFile(logDir)
-			if yamlReportFile != "" {
-				if artifact, err := readFileAsBase64WithLimits(yamlReportFile, maxFileBytes, maxLogLines); err == nil {
-					fileName := filepath.Base(yamlReportFile)
-					artifact.Type = "e2e-report"
-					artifacts[fileName] = artifact
-
-					if artifact.Truncated {
-						slog.Warn("YAML report file truncated for dispatch payload", "file", fileName, "original_size", artifact.OriginalSize, "max_bytes", maxFileBytes, "max_lines", maxLogLines)
-					}
-					if artifact.Compressed {
-						slog.Debug("YAML report file compressed for dispatch payload", "file", fileName, "original_size", artifact.OriginalSize, "compressed_size", len(artifact.Content))
-					}
-					slog.Debug("Added YAML report file to dispatch payload", "file", fileName, "size", len(artifact.Content), "truncated", artifact.Truncated, "compressed", artifact.Compressed)
-				} else {
-					slog.Debug("Failed to read YAML report file for dispatch", "file", yamlReportFile, "error", err)
-				}
-			} else if hasResultFile {
-				// If has_result_file is true but no YAML report file found, return error
-				return nil, fmt.Errorf("result file is required (has_result_file=true) but no e2e-report.yaml file found in %s. Make sure your test script creates the file specified by HOME_CI_RESULT_FILE environment variable", logDir)
-			}
+	// Create archive if we have files
+	if len(files) > 0 {
+		if archive, err := createCompressedArtifactsArchive(files); err == nil {
+			artifacts["combined-archive.tar.gz"] = archive
+			slog.Info("Created combined archive", "files_count", len(files), "compressed_size", len(archive.Content), "original_total_size", archive.OriginalSize, "truncated", archive.Truncated)
+		} else {
+			slog.Error("Failed to create combined archive", "error", err)
+			return nil, fmt.Errorf("failed to create combined archive: %w", err)
 		}
 	}
 
@@ -577,7 +447,7 @@ func createArtifactsMap(branch, commit string, success bool, logFilePath, result
 }
 
 // createClientPayload creates the complete client payload for the dispatch
-func createClientPayload(branch, commit string, success bool, logFilePath, resultFilePath string, hasResultFile bool, maxFileBytes, maxLogLines int, useCombinedArchive bool) (map[string]interface{}, error) {
+func createClientPayload(branch, commit string, success bool, logFilePath, resultFilePath string, hasResultFile bool, maxFileBytes, maxLogLines int) (map[string]interface{}, error) {
 	// Create artifact name with cleaned branch name and short commit
 	branchClean := strings.ReplaceAll(branch, "/", "_")
 	commitShort := commit
@@ -586,7 +456,7 @@ func createClientPayload(branch, commit string, success bool, logFilePath, resul
 	}
 	artifactName := fmt.Sprintf("log-%s-%s", branchClean, commitShort)
 
-	artifacts, err := createArtifactsMap(branch, commit, success, logFilePath, resultFilePath, hasResultFile, maxFileBytes, maxLogLines, useCombinedArchive)
+	artifacts, err := createArtifactsMap(branch, commit, success, logFilePath, resultFilePath, hasResultFile, maxFileBytes, maxLogLines)
 	if err != nil {
 		return nil, err
 	}
@@ -648,7 +518,7 @@ func (tr *TestRunner) notifyGitHubActions(branch, commit string, success bool, l
 	eventType := determineEventType(config.DispatchType, success)
 
 	// Create payload with size limits from config
-	clientPayload, err := createClientPayload(branch, commit, success, logFilePath, resultFilePath, config.HasResultFile, config.MaxFileBytes, config.MaxLogLines, config.UseCombinedArchive)
+	clientPayload, err := createClientPayload(branch, commit, success, logFilePath, resultFilePath, config.HasResultFile, config.MaxFileBytes, config.MaxLogLines)
 	if err != nil {
 		return fmt.Errorf("failed to create client payload: %w", err)
 	}

@@ -258,7 +258,7 @@ func TestCreateClientPayload(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			payload, err := createClientPayload(tc.branch, tc.commit, tc.success, "", "", false, 20*1024, 1000, false)
+			payload, err := createClientPayload(tc.branch, tc.commit, tc.success, "", "", false, 20*1024, 1000)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -524,8 +524,8 @@ func TestCreateArtifactsMapCombinedArchive(t *testing.T) {
 		t.Fatalf("Failed to write result file: %v", err)
 	}
 
-	// Test with combined archive mode enabled
-	artifacts, err := createArtifactsMap("main", "abc123", true, logFile, resultFile, false, 1000, 100, true)
+	// Test with combined archive mode (now the only mode)
+	artifacts, err := createArtifactsMap("main", "abc123", true, logFile, resultFile, false, 1000, 100)
 	if err != nil {
 		t.Fatalf("Failed to create artifacts map: %v", err)
 	}
@@ -558,20 +558,4 @@ func TestCreateArtifactsMapCombinedArchive(t *testing.T) {
 		t.Error("Expected metadata artifact not found")
 	}
 
-	// Test with combined archive mode disabled (original behavior)
-	artifacts, err = createArtifactsMap("main", "abc123", true, logFile, resultFile, false, 1000, 100, false)
-	if err != nil {
-		t.Fatalf("Failed to create artifacts map in individual mode: %v", err)
-	}
-
-	// Check that individual files are present instead of archive
-	if _, found := artifacts["combined-archive.tar.gz"]; found {
-		t.Error("Did not expect combined archive when disabled")
-	}
-	if _, found := artifacts["test.log"]; !found {
-		t.Error("Expected individual log file artifact not found")
-	}
-	if _, found := artifacts["result.json"]; !found {
-		t.Error("Expected individual result file artifact not found")
-	}
 }
