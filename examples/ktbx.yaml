@@ -17,12 +17,15 @@ keep_time: 2h
 
 # TODO
 cleanup:
-  after_e2e: false 
+  after_e2e: false
   script: "e2e/clean.sh"
 
 github_actions_dispatch:
   enabled: true
   github_token_file: "/home/fjammes/src/github.com/k8s-school/ktbx/secret.yaml"
-  dispatch_type: "test-dispatch-with-artifacts"
+  dispatch_type: "dispatch-with-artifacts"
   has_result_file: true
-
+  max_payload_size: 45000    # 45KB limit for GitHub API
+  max_log_lines: 1000        # Keep last 1000 lines of logs
+  max_file_bytes: 20000      # 20KB max per file before truncation
+  # Combined archive is now the default and only mode
