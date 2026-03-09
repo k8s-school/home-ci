@@ -1,2 +1,3 @@
+* si pas de e2e-report.yaml, on envoie quand même la notif github avec une erreur
 * Time out 60m for fink-broker was not qorking!!!
 
