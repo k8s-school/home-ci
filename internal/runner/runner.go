@@ -650,7 +650,13 @@ func (te *TestExecution) saveTestResultForDispatch() {
 
 // sendGitHubNotificationIfNeeded sends GitHub Actions notification if enabled
 func (te *TestExecution) sendGitHubNotificationIfNeeded() {
+	slog.Debug("Checking GitHub Actions dispatch",
+		"enabled", te.runner.config.GitHubActionsDispatch.Enabled,
+		"github_repo", te.runner.config.GitHubActionsDispatch.GitHubRepo,
+		"token_file", te.runner.config.GitHubActionsDispatch.GitHubTokenFile)
+
 	if !te.runner.config.GitHubActionsDispatch.Enabled {
+		slog.Debug("GitHub Actions dispatch is disabled")
 		return
 	}
 
@@ -703,13 +709,18 @@ func (tr *TestRunner) RunTestsManually(branch, commit string, commitExplicitlySp
 	// Execute the test
 	if err := execution.executeTest(); err != nil {
 		execution.testResult.ErrorMessage = err.Error()
-		return err
+		// Don't return immediately - we still want to run post-execution tasks like GitHub dispatch
 	}
 
 	// Post-execution tasks
 	execution.runCleanupIfNeeded()
 	execution.saveTestResultForDispatch()
 	execution.sendGitHubNotificationIfNeeded()
+
+	// Return error after post-execution tasks if test failed
+	if execution.testResult.ErrorMessage != "" {
+		return fmt.Errorf(execution.testResult.ErrorMessage)
+	}
 
 	slog.Info("Manual test execution completed", "branch", branch, "commit", utils.ShortCommit(commit), "success", execution.testResult.Success)
 	return nil
