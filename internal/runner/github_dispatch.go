@@ -373,10 +373,12 @@ func truncateBase64Content(payload map[string]interface{}) map[string]interface{
 }
 
 // createArtifactsMap creates the artifacts map for the dispatch payload using combined archive
-func createArtifactsMap(branch, commit string, success bool, logFilePath, resultFilePath string, hasResultFile bool, maxFileBytes, maxLogLines int) (map[string]interface{}, error) {
+// Returns the artifacts map and a boolean indicating if a required file is missing
+func createArtifactsMap(branch, commit string, success bool, logFilePath, resultFilePath string, hasResultFile bool, maxFileBytes, maxLogLines int) (map[string]interface{}, bool, error) {
 	slog.Debug("Creating artifacts map", "branch", branch, "commit", commit, "success", success, "logFile", logFilePath, "resultFile", resultFilePath, "hasResultFile", hasResultFile)
 	artifacts := make(map[string]interface{})
 	var files []FileToArchive
+	var missingRequiredFile bool
 
 	// Add log file
 	if logFilePath != "" {
@@ -419,7 +421,11 @@ func createArtifactsMap(branch, commit string, success bool, logFilePath, result
 				slog.Debug("Failed to read YAML report file for archive", "file", yamlReportFile, "error", err)
 			}
 		} else if hasResultFile {
-			return nil, fmt.Errorf("result file is required (has_result_file=true) but no e2e-report.yaml file found in %s. Make sure your test script creates the file specified by HOME_CI_RESULT_FILE environment variable", logDir)
+			missingRequiredFile = true
+			slog.Warn("Required result file missing",
+				"dir", logDir,
+				"file", "e2e-report.yaml",
+				"message", "Result file is required (has_result_file=true) but no e2e-report.yaml file found. Make sure your test script creates the file specified by HOME_CI_RESULT_FILE environment variable")
 		}
 	}
 
@@ -430,7 +436,7 @@ func createArtifactsMap(branch, commit string, success bool, logFilePath, result
 			slog.Info("Created combined archive", "files_count", len(files), "compressed_size", len(archive.Content), "original_total_size", archive.OriginalSize, "truncated", archive.Truncated)
 		} else {
 			slog.Error("Failed to create combined archive", "error", err)
-			return nil, fmt.Errorf("failed to create combined archive: %w", err)
+			return nil, missingRequiredFile, fmt.Errorf("failed to create combined archive: %w", err)
 		}
 	}
 
@@ -443,7 +449,7 @@ func createArtifactsMap(branch, commit string, success bool, logFilePath, result
 		OriginalSize: 0,
 	}
 
-	return artifacts, nil
+	return artifacts, missingRequiredFile, nil
 }
 
 // createClientPayload creates the complete client payload for the dispatch
@@ -456,9 +462,14 @@ func createClientPayload(branch, commit string, success bool, logFilePath, resul
 	}
 	artifactName := fmt.Sprintf("log-%s-%s", branchClean, commitShort)
 
-	artifacts, err := createArtifactsMap(branch, commit, success, logFilePath, resultFilePath, hasResultFile, maxFileBytes, maxLogLines)
+	artifacts, missingRequiredFile, err := createArtifactsMap(branch, commit, success, logFilePath, resultFilePath, hasResultFile, maxFileBytes, maxLogLines)
 	if err != nil {
 		return nil, err
+	}
+
+	// If a required file is missing, consider the test failed
+	if missingRequiredFile {
+		success = false
 	}
 
 	return map[string]interface{}{
@@ -470,9 +481,10 @@ func createClientPayload(branch, commit string, success bool, logFilePath, resul
 		"artifact_name": artifactName,
 		"artifacts":     artifacts,
 		"metadata": map[string]interface{}{
-			"branch":  branch,
-			"commit":  commit,
-			"success": success,
+			"branch":               branch,
+			"commit":               commit,
+			"success":              success,
+			"missing_required_file": missingRequiredFile,
 		},
 	}, nil
 }

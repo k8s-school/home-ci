@@ -525,7 +525,7 @@ func TestCreateArtifactsMapCombinedArchive(t *testing.T) {
 	}
 
 	// Test with combined archive mode (now the only mode)
-	artifacts, err := createArtifactsMap("main", "abc123", true, logFile, resultFile, false, 1000, 100)
+	artifacts, _, err := createArtifactsMap("main", "abc123", true, logFile, resultFile, false, 1000, 100)
 	if err != nil {
 		t.Fatalf("Failed to create artifacts map: %v", err)
 	}
@@ -558,4 +558,127 @@ func TestCreateArtifactsMapCombinedArchive(t *testing.T) {
 		t.Error("Expected metadata artifact not found")
 	}
 
+}
+
+func TestCreateArtifactsMapMissingRequiredFile(t *testing.T) {
+	// This test verifies the fix for the issue where missing e2e-report.yaml
+	// would block GitHub Actions dispatch entirely
+	tempDir, err := os.MkdirTemp("", "missing_file_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create only a log file, no e2e-report.yaml
+	logFile := filepath.Join(tempDir, "test.log")
+	logContent := "Test log content with no e2e-report.yaml file"
+	err = os.WriteFile(logFile, []byte(logContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write log file: %v", err)
+	}
+
+	// Test with hasResultFile=true but no e2e-report.yaml present
+	// This should NOT return an error anymore, but should set missingRequiredFile=true
+	artifacts, missingRequiredFile, err := createArtifactsMap("main", "def456", true, logFile, "", true, 1000, 100)
+	if err != nil {
+		t.Fatalf("Expected no error when e2e-report.yaml is missing, but got: %v", err)
+	}
+
+	// Verify that missing required file is detected
+	if !missingRequiredFile {
+		t.Error("Expected missingRequiredFile to be true when e2e-report.yaml is missing")
+	}
+
+	// Verify that we still get artifacts (containing at least the log file)
+	if artifacts == nil {
+		t.Fatal("Expected artifacts map to be non-nil")
+	}
+
+	// Check that we have the combined archive with just the log file
+	archiveArtifact, found := artifacts["combined-archive.tar.gz"]
+	if !found {
+		t.Error("Expected combined archive artifact not found")
+		return
+	}
+
+	artifact, ok := archiveArtifact.(Artifact)
+	if !ok {
+		t.Errorf("Expected Artifact type, got %T", archiveArtifact)
+		return
+	}
+
+	if artifact.Type != "archive" {
+		t.Errorf("Expected archive type, got %s", artifact.Type)
+	}
+	if len(artifact.Files) != 1 {
+		t.Errorf("Expected exactly 1 file in archive (just the log), got %d", len(artifact.Files))
+	}
+
+	t.Logf("✅ Test passed: Missing e2e-report.yaml no longer blocks dispatch, missingRequiredFile=%t", missingRequiredFile)
+}
+
+func TestCreateClientPayloadWithMissingRequiredFile(t *testing.T) {
+	// Test the full client payload creation when e2e-report.yaml is missing
+	tempDir, err := os.MkdirTemp("", "payload_missing_file_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create only a log file, no e2e-report.yaml
+	logFile := filepath.Join(tempDir, "test.log")
+	logContent := "Test execution failed - no e2e-report.yaml produced"
+	err = os.WriteFile(logFile, []byte(logContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write log file: %v", err)
+	}
+
+	// Create client payload with hasResultFile=true but missing e2e-report.yaml
+	payload, err := createClientPayload("feature/test", "abc123def456", true, logFile, "", true, 1000, 100)
+	if err != nil {
+		t.Fatalf("Expected no error when creating payload with missing e2e-report.yaml, but got: %v", err)
+	}
+
+	// Verify payload structure
+	if payload == nil {
+		t.Fatal("Expected payload to be non-nil")
+	}
+
+	// Check that success is now false due to missing required file
+	success, ok := payload["success"].(bool)
+	if !ok {
+		t.Fatal("Expected success field to be boolean")
+	}
+	if success {
+		t.Error("Expected success to be false when required file is missing")
+	}
+
+	// Check metadata contains missing_required_file information
+	metadata, ok := payload["metadata"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Expected metadata to be map[string]interface{}")
+	}
+
+	missingFile, found := metadata["missing_required_file"]
+	if !found {
+		t.Error("Expected missing_required_file field in metadata")
+	}
+
+	missingFileBool, ok := missingFile.(bool)
+	if !ok {
+		t.Errorf("Expected missing_required_file to be boolean, got %T", missingFile)
+	}
+	if !missingFileBool {
+		t.Error("Expected missing_required_file to be true")
+	}
+
+	// Verify other expected fields
+	if branch, ok := payload["branch"].(string); !ok || branch != "feature/test" {
+		t.Errorf("Expected branch 'feature/test', got %v", payload["branch"])
+	}
+	if commit, ok := payload["commit"].(string); !ok || commit != "abc123def456" {
+		t.Errorf("Expected commit 'abc123def456', got %v", payload["commit"])
+	}
+
+	t.Logf("✅ Client payload test passed: missing_required_file=%t, success=%t", missingFileBool, success)
 }
